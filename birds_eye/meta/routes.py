@@ -41,15 +41,9 @@ def entry(request: Request):
 async def run(request: Request, inputs: BriefRequest | RunInputs | None = None):
     settings = request.app.state.settings
     scenario = resolve(request, inputs if isinstance(inputs, RunInputs) else None)
-    if isinstance(inputs, BriefRequest):
-        scenario = scenario.model_copy(
-            update={
-                "creator_brief": scenario.creator_brief.model_copy(
-                    update={"goal": inputs.brief, "label": "User creator brief"}
-                )
-            }
-        )
     context = make_context(scenario)
+    if isinstance(inputs, BriefRequest):
+        context = context.model_copy(update={"user_brief": inputs.brief})
     if settings.provider_mode == "stub":
         return JSONResponse(
             status_code=501,
@@ -73,10 +67,12 @@ async def run(request: Request, inputs: BriefRequest | RunInputs | None = None):
         ).model_dump(mode="json")
     except RoutingError as exc:
         return JSONResponse(
-            status_code=429 if exc.code == "RUN_BUDGET_EXCEEDED" else 502,
+            status_code=502,
             content={
                 "code": exc.code,
                 "message": exc.message,
                 "attempts": exc.attempts,
+                "stages": exc.stages,
+                "failed_stage": exc.failed_stage,
             },
         )

@@ -46,11 +46,17 @@ class LiveTransport:
             raise ProviderError("CONFIGURATION_ERROR")
         body = {
             "model": binding.concrete_model,
-            "messages": [{"role": "user", "content": request.prompt}],
-            "max_tokens": request.max_tokens,
+            "messages": [
+                {"role": "developer", "content": request.instructions},
+                {"role": "user", "content": request.prompt},
+            ],
+            "max_completion_tokens": request.max_tokens,
+            "reasoning_effort": (
+                self.settings.meta_reasoning_effort or self.settings.reasoning_effort
+            )
+            if binding.provider == ProviderId.META
+            else self.settings.reasoning_effort,
         }
-        if binding.provider == ProviderId.META and self.settings.meta_reasoning_effort:
-            body["reasoning_effort"] = self.settings.meta_reasoning_effort
         try:
             if self.client is not None:
                 response = await self.client.post(
@@ -87,13 +93,24 @@ class LiveTransport:
             data = response.json()
             choice = data["choices"][0]
             content = choice["message"]["content"]
-            if not content and choice.get("finish_reason") == "length":
-                raise ProviderError("EMPTY_CONTENT_LENGTH")
+            finish_reason = choice.get("finish_reason")
+            if finish_reason == "length" and (
+                not isinstance(content, str) or len(content.strip()) < 40
+            ):
+                error = ProviderError("EMPTY_CONTENT_LENGTH")
+                error.usage = data.get("usage")
+                error.finish_reason = finish_reason
+                raise error
             if not isinstance(content, str) or not content.strip():
                 raise ProviderError("MALFORMED_RESPONSE")
             usage = data.get("usage")
             if usage is not None and not isinstance(usage, dict):
                 raise ProviderError("MALFORMED_RESPONSE")
-            return ProviderReply(output=content, usage=usage)
+            return ProviderReply(
+                output=content,
+                usage=usage,
+                finish_reason=finish_reason,
+                truncated=finish_reason == "length",
+            )
         except (KeyError, IndexError, TypeError, ValueError):
             raise ProviderError("MALFORMED_RESPONSE") from None

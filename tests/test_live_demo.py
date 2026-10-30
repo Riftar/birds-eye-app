@@ -29,8 +29,12 @@ async def test_live_request_and_parse(settings, muse_request):
         body = json.loads(request.content)
         assert body == {
             "model": "model",
-            "messages": [{"role": "user", "content": ""}],
-            "max_tokens": 40,
+            "messages": [
+                {"role": "developer", "content": ""},
+                {"role": "user", "content": ""},
+            ],
+            "max_completion_tokens": 40,
+            "reasoning_effort": "low",
         }
         return httpx.Response(
             200,

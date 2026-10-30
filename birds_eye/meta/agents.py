@@ -12,7 +12,20 @@ from birds_eye.providers.contracts import ModelRequest
 from birds_eye.providers.router import ModelRouter
 
 
-async def call(ctx, router, stage, prompt):
+def context_text(ctx):
+    brief = (
+        ctx.user_brief
+        if ctx.user_brief is not None
+        else ctx.inputs.creator_brief.model_dump_json()
+    )
+    return (
+        f"Creator brief (primary input):\n{brief}\n\n"
+        f"Product sheet (secondary constraints where applicable):\n{ctx.inputs.product_sheet.model_dump_json()}\n\n"
+        f"Rulebook (secondary house rules where applicable):\n{ctx.inputs.rulebook.model_dump_json()}"
+    )
+
+
+async def call(ctx, router, stage, instructions, inputs):
     return await router.call(
         ModelRequest(
             run_id=str(ctx.run_id),
@@ -20,18 +33,21 @@ async def call(ctx, router, stage, prompt):
             call_id=stage,
             logical_model="muse-spark",
             operation="text",
-            prompt=prompt,
+            prompt=inputs,
+            instructions=instructions
+            + " The creator brief defines the business, brand, product, audience and format. The product sheet and rulebook only add constraints where applicable; never replace the brief's brand or subject.",
+            max_tokens=getattr(router.settings, f"{stage}_max_tokens"),
         )
     )
 
 
 async def plan(ctx: RunContext, router: ModelRouter) -> ContentPlan:
-    inputs = ctx.inputs
     response = await call(
         ctx,
         router,
         "planner",
-        f"Create a content plan for a short video or carousel in at most 150 words.\nBrief: {inputs.creator_brief.model_dump_json()}\nProduct sheet: {inputs.product_sheet.model_dump_json()}\nRulebook: {inputs.rulebook.model_dump_json()}",
+        "Create a concise plan in short labelled sections: hook, format, key points, CTA. At most 150 words.",
+        context_text(ctx),
     )
     return ContentPlan(summary=response.output, attempts=response.metadata)
 
@@ -42,12 +58,17 @@ async def write(
     router: ModelRouter,
     feedback: ReviewVerdict | None = None,
 ) -> Draft:
+    inputs = (
+        context_text(ctx)
+        + f"\n\nPlan: {plan.summary}"
+        + (f"\nFeedback: {feedback.output}" if feedback else "")
+    )
     response = await call(
         ctx,
         router,
         "writer",
-        f"Write the short-video script or carousel specified by this plan. Return only the draft, at most 180 words.\nPlan: {plan.summary}"
-        + (f"\nFeedback: {feedback.output}" if feedback else ""),
+        "Write the final script or slides, at most 180 words. Return only the draft.",
+        inputs,
     )
     return Draft(content=response.output, attempts=response.metadata)
 
@@ -59,7 +80,8 @@ async def review(
         ctx,
         router,
         "reviewer",
-        f'Review this draft against the product sheet and rulebook. Output ONLY compact JSON {{"decision":"approve"|"revise","findings":[...]}}, with at most 4 findings of at most 20 words each. No markdown.\nDraft: {draft.content}\nProduct sheet: {ctx.inputs.product_sheet.model_dump_json()}\nRulebook: {ctx.inputs.rulebook.model_dump_json()}',
+        'Check the draft against the creator brief first, then the rulebook and product sheet. Output only compact JSON {"decision":"approve"|"revise","findings":[...]}, at most 4 findings of at most 20 words each. No markdown.',
+        context_text(ctx) + f"\n\nDraft: {draft.content}",
     )
     return parse_verdict(response.output, response.metadata)
 

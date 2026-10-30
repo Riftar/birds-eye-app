@@ -39,7 +39,7 @@ def settings(monkeypatch):
         "META_REASONING_EFFORT",
     ):
         monkeypatch.delenv(name, raising=False)
-    return Settings()
+    return Settings(provider_max_retries=0)
 
 
 @pytest.fixture

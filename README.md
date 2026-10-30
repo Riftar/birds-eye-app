@@ -125,7 +125,7 @@ Set `BASETEN_API_KEY` and/or `MODEL_API_KEY` in the environment, then run:
 PROVIDER_MODE=live uv run uvicorn birds_eye.app:create_app --factory --port 8000
 ```
 
-Open `/` and submit a brief. The product sheet and rulebook are MOCK data. To exercise fallback, set `FORCE_FAIL_PROVIDERS=baseten`; the forced attempt is recorded without making a provider request. `MAX_CALLS_PER_RUN` (6) and `MAX_TOKENS_PER_RUN` (16000) cap reserved attempts per run; `MUSE_MAX_TOKENS_DEFAULT` defaults to 2000 with a 400 minimum.
+Open `/` and submit a brief. The product sheet and rulebook are MOCK data. To exercise fallback, set `FORCE_FAIL_PROVIDERS=baseten`; the forced attempt is recorded without making a provider request. The creator brief is the primary input for every stage; the mock product sheet and rulebook provide secondary constraints. `PLANNER_MAX_TOKENS=4000`, `WRITER_MAX_TOKENS=4000`, and `REVIEWER_MAX_TOKENS=3000` set completion budgets (minimum 400). `MAX_CALLS_PER_RUN=12` and `MAX_TOKENS_PER_RUN=16000` limit the run, including retries and prompt usage. Timeouts retain their full reservation. `PROVIDER_MAX_RETRIES=2` and `PROVIDER_RETRY_BASE_SECONDS=1` control exponential backoff with jitter; `PROVIDER_TIMEOUT_SECONDS=120` controls the timeout. `REASONING_EFFORT=low` applies to both providers, with optional `META_REASONING_EFFORT` override. Truncated outputs and failed attempts are shown in the results.
 
 To deploy, export both provider keys in the deployer's environment, then run:
 
