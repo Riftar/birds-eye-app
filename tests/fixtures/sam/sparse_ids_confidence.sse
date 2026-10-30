@@ -1,8 +1,8 @@
 event: response.output_text.delta
-data: {"type": "response.output_text.delta", "delta": "<0f>3<|box;x1=5;y1=6;x2=50;y2=60;w=45;h=54;c=0.93|><|mask;x=0;y=0;data=3,4,~FAKELOSSLESSPAYLOAD|>"}
+data: {"type": "response.output_text.delta", "delta": "<0f>3<|box;x1=5;y1=6;x2=50;y2=60;w=100;h=120;c=0.93|><|mask;x=0;y=0;data=3,4,~FAKELOSSLESSPAYLOAD|>"}
 
 event: response.output_text.delta
-data: {"type": "response.output_text.delta", "delta": ",7<|box;x1=60;y1=70;x2=90;y2=100;w=30;h=30|><|mask;x=0;y=0;c=0.81;data=3,4,~FAKELOSSLESSPAYLOAD|>"}
+data: {"type": "response.output_text.delta", "delta": ",7<|box;x1=60;y1=70;x2=90;y2=100;w=100;h=120|><|mask;x=0;y=0;c=0.81;data=3,4,~FAKELOSSLESSPAYLOAD|>"}
 
 event: response.completed
 data: {"type": "response.completed", "response": {"id": "resp_mock", "status": "completed"}}

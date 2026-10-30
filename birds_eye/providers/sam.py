@@ -50,8 +50,9 @@ class MediaInput(BaseModel):
         if self.data_url:
             return self.data_url
         if self.file_id:
-            return self.file_id
-        raise ValueError("MediaInput needs data_url or file_id.")
+            # TODO(#19): route Files API IDs through the upload/reference path.
+            raise ValueError("MediaInput file_id requires the Files API path.")
+        raise ValueError("MediaInput needs data_url.")
 
 
 class Box(BaseModel):
@@ -138,7 +139,9 @@ def _decode_payload(encoding: str, payload: str, w: int, h: int) -> bytes | None
         return None
 
 
-def _parse_record(object_id: str, region: str) -> tuple[Box, MaskInfo, float | None]:
+def _parse_record(
+    object_id: str, region: str
+) -> tuple[Box, MaskInfo, float | None, int, int]:
     tokens: list[tuple[str, str | None]] = []
     pos = 0
     for match in _TOKEN_RE.finditer(region):
@@ -166,6 +169,7 @@ def _parse_record(object_id: str, region: str) -> tuple[Box, MaskInfo, float | N
         value is None or _UNSIGNED_INT_RE.fullmatch(value) is None for value in dims
     ):
         raise _malformed("Segmentation box needs unsigned w/h.")
+    source_w, source_h = int(dims[0]), int(dims[1])
     if mask_fields.get("x") != "0" or mask_fields.get("y") != "0":
         raise _malformed("Segmentation mask needs x=0;y=0.")
     data = _MASK_DATA_RE.fullmatch(mask_fields.get("data") or "")
@@ -196,7 +200,7 @@ def _parse_record(object_id: str, region: str) -> tuple[Box, MaskInfo, float | N
         payload_len=len(payload),
         raster=_decode_payload(encoding, payload, mask_w, mask_h),
     )
-    return box, mask, confidence
+    return box, mask, confidence, source_w, source_h
 
 
 def parse_segmentation_text(text: str) -> SegmentationResult:
@@ -226,9 +230,13 @@ def parse_segmentation_text(text: str) -> SegmentationResult:
         for index, match in enumerate(matches):
             end = matches[index + 1].start() if index + 1 < len(matches) else len(rest)
             region = rest[match.end() : end]
-            box, mask, confidence = _parse_record(match.group(1), region)
+            box, mask, confidence, source_w, source_h = _parse_record(
+                match.group(1), region
+            )
             if not result.objects:
-                result.source_w, result.source_h = mask.w, mask.h
+                result.source_w, result.source_h = source_w, source_h
+            elif (source_w, source_h) != (result.source_w, result.source_h):
+                raise _malformed("Segmentation records have inconsistent source dims.")
             result.objects.append(
                 SegmentedObject(
                     object_id=match.group(1),

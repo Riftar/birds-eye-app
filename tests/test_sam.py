@@ -39,6 +39,14 @@ def read_fixture(name: str) -> str:
     return (FIXTURES / name).read_text()
 
 
+def fixture_output(name: str) -> str:
+    return "".join(
+        json.loads(line.removeprefix("data: "))["delta"]
+        for line in read_fixture(name).splitlines()
+        if line.startswith("data: ") and '"delta"' in line
+    )
+
+
 @pytest.mark.asyncio
 async def test_request_shape():
     captured = []
@@ -86,16 +94,43 @@ async def test_request_shape_with_mask_options():
 async def test_parse_single_object_lossless():
     async with sse_client(read_fixture("lossless.sse")) as client:
         result = await segment(client, BASE_URL, KEY, IMAGE, PROMPT, 30.0)
-    assert (result.source_w, result.source_h) == (4, 3)
+    assert (result.source_w, result.source_h) == (100, 100)
     assert len(result.objects) == 1
     obj = result.objects[0]
     assert (obj.object_id, obj.frame) == ("1", 0)
-    assert (obj.box.x1, obj.box.y1, obj.box.x2, obj.box.y2) == (10, 20, 110, 120)
+    assert (obj.box.x1, obj.box.y1, obj.box.x2, obj.box.y2) == (10, 20, 90, 90)
     assert obj.confidence is None
     assert (obj.mask.h, obj.mask.w) == (3, 4)
     assert obj.mask.encoding == "lossless"
     assert obj.mask.payload_len == len("~FAKELOSSLESSPAYLOAD")
     assert obj.mask.raster is None
+
+
+def test_source_dims_come_from_box_w_h_not_mask():
+    result = parse_segmentation_text(fixture_output("lossless.sse"))
+    assert (result.source_w, result.source_h) == (100, 100)
+    assert (result.objects[0].mask.w, result.objects[0].mask.h) == (4, 3)
+
+
+def test_inconsistent_source_dims_is_malformed():
+    text = (
+        "<0f>1<|box;x1=0;y1=0;x2=1;y2=1;w=10;h=10|>"
+        "<|mask;x=0;y=0;data=1,1,~MOCK|>\n"
+        "<1f>2<|box;x1=0;y1=0;x2=1;y2=1;w=11;h=10|>"
+        "<|mask;x=0;y=0;data=1,1,~MOCK|>"
+    )
+    with pytest.raises(ProviderError) as error:
+        parse_segmentation_text(text)
+    assert error.value.code == "MALFORMED_RESPONSE"
+
+
+def test_fixture_boxes_within_source_dims():
+    result = parse_segmentation_text(fixture_output("lossless.sse"))
+    assert all(
+        0 <= obj.box.x1 <= obj.box.x2 <= result.source_w - 1
+        and 0 <= obj.box.y1 <= obj.box.y2 <= result.source_h - 1
+        for obj in result.objects
+    )
 
 
 @pytest.mark.asyncio
@@ -207,3 +242,20 @@ async def test_missing_image_url_is_invalid_request():
         with pytest.raises(ProviderError) as error:
             await segment(client, BASE_URL, KEY, MediaInput(), PROMPT, 30.0)
     assert error.value.code == "INVALID_REQUEST"
+
+
+@pytest.mark.asyncio
+async def test_file_id_only_media_is_invalid_request_until_files_api():
+    captured = []
+    async with sse_client(read_fixture("lossless.sse"), captured=captured) as client:
+        with pytest.raises(ProviderError) as error:
+            await segment(
+                client,
+                BASE_URL,
+                KEY,
+                MediaInput(file_id="file_mock_123"),
+                PROMPT,
+                30.0,
+            )
+    assert error.value.code == "INVALID_REQUEST"
+    assert captured == []
