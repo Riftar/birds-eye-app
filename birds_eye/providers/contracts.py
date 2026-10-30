@@ -27,6 +27,7 @@ class ModelRequest(BaseModel):
     logical_model: str
     operation: Literal["text", "segmentation"]
     prompt: str = ""
+    instructions: str = ""
     max_tokens: int | None = Field(default=None, gt=0)
     max_cost_usd: Decimal = Field(default=Decimal(0), ge=0)
 
@@ -35,6 +36,8 @@ class ProviderReply(BaseModel):
     output: Any
     usage: dict | None = None
     cost_usd: Decimal | None = None
+    finish_reason: str | None = None
+    truncated: bool = False
 
 
 class ModelResponse(BaseModel):
@@ -71,3 +74,5 @@ class RoutingError(SafeError):
     def __init__(self, code: str, message: str, attempts: list[dict]):
         super().__init__(code, message)
         self.attempts = attempts
+        self.stages = []
+        self.failed_stage = None

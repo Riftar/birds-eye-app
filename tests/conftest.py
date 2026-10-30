@@ -28,9 +28,18 @@ def settings(monkeypatch):
         "MODEL_API_KEY",
         "MODAL_MUSE_MODEL_ID",
         "DEFAULT_SCENARIO_DIR",
+        "PROVIDER_MODE",
+        "FORCE_FAIL_PROVIDERS",
+        "MAX_CALLS_PER_RUN",
+        "MAX_TOKENS_PER_RUN",
+        "MUSE_MAX_TOKENS_DEFAULT",
+        "BASETEN_BASE_URL",
+        "META_MODEL_API_BASE_URL",
+        "MODAL_MUSE_ENDPOINT",
+        "META_REASONING_EFFORT",
     ):
         monkeypatch.delenv(name, raising=False)
-    return Settings()
+    return Settings(provider_max_retries=0)
 
 
 @pytest.fixture

@@ -11,7 +11,9 @@ def bindings(settings: Settings) -> list[ModelBinding]:
             operation="text",
         )
     ]
-    if settings.modal_muse_model_id:
+    if settings.modal_muse_model_id and (
+        settings.provider_mode == "stub" or settings.modal_muse_endpoint
+    ):
         result.append(
             ModelBinding(
                 logical_model="muse-spark",
