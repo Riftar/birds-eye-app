@@ -133,7 +133,7 @@ async def test_missing_credentials_budget_and_capability_record_skips(
         await ModelRouter(settings, FakeTransport(), budget).call(muse_request)
     assert [r["error_code"] for r in error.value.attempts] == [
         "BUDGET_EXHAUSTED",
-        "UNSUPPORTED_CAPABILITY",
+        "NOT_CONFIGURED",
         "MISSING_CREDENTIALS",
     ]
     assert all(r["status"] == "skipped" for r in error.value.attempts)
@@ -169,3 +169,22 @@ async def test_disabled_transport_never_networks(muse_request):
     with pytest.raises(ProviderError) as error:
         await DisabledTransport().invoke(binding, muse_request)
     assert error.value.code == "INTEGRATION_NOT_READY"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("model_id", "endpoint"),
+    [(None, None), ("deployment", None), (None, "https://example.invalid/v1")],
+)
+async def test_unconfigured_live_modal_is_skipped(
+    settings, budget, muse_request, model_id, endpoint
+):
+    settings.provider_mode = "live"
+    settings.modal_muse_model_id = model_id
+    settings.modal_muse_endpoint = endpoint
+    settings.model_api_key = configured_secret()
+    result = await ModelRouter(
+        settings, FakeTransport([ProviderReply(output="ok")]), budget
+    ).call(muse_request)
+    assert result.metadata[1]["status"] == "skipped"
+    assert result.metadata[1]["error_code"] == "NOT_CONFIGURED"

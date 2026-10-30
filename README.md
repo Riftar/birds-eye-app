@@ -78,7 +78,7 @@ This is not a hypothetical tool. Birds Eye industrializes a content pipeline I r
 
 ## Status
 
-Meta 01 provides shared contracts, input loading, lifecycle validation, provider routing and two API entry points. Agent stages and both pipelines are explicit stubs; paid integrations are disabled.
+Meta 01 provides shared contracts, input loading, lifecycle validation, provider routing and two API entry points. The Meta demo runs a single Planner, Writer and Reviewer pass in live mode; the Tencent pipeline remains a stub.
 
 
 ## Built during the hackathon (event-start)
@@ -87,13 +87,13 @@ The Meta AI Hackathon kicked off Monday 26 Oct 2026, 12:00 PM ET (23:00 WIB). Th
 
 ## Model usage
 
-Muse Spark is intended to drive Planner, Writer and Reviewer; SAM 3.1 segments creator images and video frames. Logical IDs remain stable as routing selects Baseten, Modal, then Meta Model API, filtered by capabilities and credentials. SAM is configured only for Meta Model API. Muse text calls have a 400-token minimum. Attempt metadata is returned and logged with model and provider attribution; credentials and inputs are excluded. Muse Voice Transcribe and Muse Image are future scope. Paid integrations are disabled.
+Planner, Writer and Reviewer call Muse Spark live when live mode is enabled; SAM 3.1 segments creator images and video frames. Logical IDs remain stable as routing selects Baseten, Modal, then Meta Model API, filtered by capabilities and credentials. SAM is configured only for Meta Model API. Muse text calls have a 400-token minimum. Attempt metadata is returned and logged with model and provider attribution; credentials and inputs are excluded. Muse Voice Transcribe and Muse Image are future scope. Live provider calls are opt-in.
 
 ## Architecture/layout
 
-`birds_eye/core` holds shared inputs and lifecycle validation; `birds_eye/providers` holds routing contracts and disabled transport; `birds_eye/meta` and `birds_eye/tencent` expose the two boundaries in one FastAPI app. `mock-data/default` contains a fake creator scenario. Inputs are read afresh for each run and retained as a snapshot. Git-backed artifacts, durable claims, authenticated decisions, scheduling and publishing are future work. Reviewer approval permits review passage, never human approval; revisions stay in review.
+`birds_eye/core` holds shared inputs and lifecycle validation; `birds_eye/providers` holds routing contracts and transports; `birds_eye/meta` and `birds_eye/tencent` expose the two boundaries in one FastAPI app. `mock-data/default` contains a fake creator scenario. Inputs are read afresh for each run and retained as a snapshot. Git-backed artifacts, durable claims, authenticated decisions, scheduling and publishing are future work. Reviewer approval permits review passage, never human approval; revisions stay in review.
 
-Budget caps are configuration placeholders. Paid transports require durable reservations, pricing or maximum-cost estimates, and reconciliation of uncertain charges. Meta 02–04 implement agents, Meta 05 orchestration and UI, Meta 06 inputs, Meta 07 Muse integrations and accounting, and Meta 08 SAM.
+Per-run call and token caps limit the live demo; provider cost caps are configuration placeholders. Paid transports require durable reservations, pricing or maximum-cost estimates, and reconciliation of uncertain charges. Durable accounting, the full gated workflow and SAM integration remain future work.
 
 ## Setup and commands
 
@@ -111,8 +111,26 @@ The Dockerfile runs the same factory with one worker and a configurable `PORT`. 
 
 ## Entry points
 
-`GET /healthz`, `GET /meta` and `GET /tencent` expose health and placeholder metadata. `POST /meta/runs` and `POST /tencent/runs` accept the same optional inputs or load the configured scenario; both validate inputs and return explicit 501 responses. WorkBuddy owns the Tencent pipeline and will connect it through the shared boundary. HTTP clients cannot supply scenario paths.
+`GET /healthz`, `GET /meta` and `GET /tencent` expose health and placeholder metadata. `POST /meta/runs` accepts a creator brief in live mode and returns stage outputs and attempts; it remains a stub by default. `POST /tencent/runs` validates inputs and returns an explicit 501 response. WorkBuddy owns the Tencent pipeline and will connect it through the shared boundary. HTTP clients cannot supply scenario paths.
 
 ## Deadlines
 
 Meta: **5 Nov 2026, 09:00 WIB**. Tencent: **7 Nov 2026**.
+
+## Live demo (Meta 02)
+
+Set `BASETEN_API_KEY` and/or `MODEL_API_KEY` in the environment, then run:
+
+```bash
+PROVIDER_MODE=live uv run uvicorn birds_eye.app:create_app --factory --port 8000
+```
+
+Open `/` and submit a brief. The product sheet and rulebook are MOCK data. To exercise fallback, set `FORCE_FAIL_PROVIDERS=baseten`; the forced attempt is recorded without making a provider request. `MAX_CALLS_PER_RUN` (6) and `MAX_TOKENS_PER_RUN` (16000) cap reserved attempts per run; `MUSE_MAX_TOKENS_DEFAULT` defaults to 2000 with a 400 minimum.
+
+To deploy, export both provider keys in the deployer's environment, then run:
+
+```bash
+MODAL_PROFILE=riftar-dev uv run --extra deploy modal deploy modal_app.py
+```
+
+The Modal app uses CPU only, 512 MB memory, zero minimum containers, a 60-second scale-down window, one maximum container, four concurrent inputs, and a 300-second timeout. The caps are per run, not a durable spending limit.

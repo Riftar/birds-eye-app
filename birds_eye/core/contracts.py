@@ -45,10 +45,12 @@ class RunContext(BaseModel):
 
 class ContentPlan(BaseModel):
     summary: str
+    attempts: list[dict] = Field(default_factory=list)
 
 
 class Draft(BaseModel):
     content: str
+    attempts: list[dict] = Field(default_factory=list)
 
 
 class Finding(BaseModel):
@@ -60,6 +62,8 @@ class Finding(BaseModel):
 class ReviewVerdict(BaseModel):
     decision: Literal["approve", "revise"]
     findings: list[Finding] = Field(default_factory=list)
+    output: str = ""
+    attempts: list[dict] = Field(default_factory=list)
 
 
 class StageEvent(BaseModel):
@@ -71,6 +75,7 @@ class StageEvent(BaseModel):
 
 
 class RunResult(BaseModel):
+    stages: list[dict] = Field(default_factory=list)
     events: list[StageEvent] = Field(default_factory=list)
 
 

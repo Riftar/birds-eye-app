@@ -17,9 +17,40 @@ from birds_eye.providers.logging import log_attempt
 from birds_eye.providers.registry import bindings
 
 
+class RunBudget:
+    def __init__(self, settings: Settings):
+        self.max_calls = settings.max_calls_per_run
+        self.max_tokens = settings.max_tokens_per_run
+        self.calls = 0
+        self.tokens = 0
+
+    def reserve(self, tokens: int):
+        if self.calls + 1 > self.max_calls or self.tokens + tokens > self.max_tokens:
+            raise ProviderError("RUN_BUDGET_EXCEEDED")
+        self.calls += 1
+        self.tokens += tokens
+
+
+class NoCostBudget:
+    async def reserve(self, provider, max_cost_usd):
+        from birds_eye.providers.contracts import Reservation
+
+        return Reservation(id="unpriced")
+
+    async def settle(self, reservation, actual_cost_usd):
+        pass
+
+
 class ModelRouter:
-    def __init__(self, settings: Settings, transport: Transport, budget: BudgetGuard):
+    def __init__(
+        self,
+        settings: Settings,
+        transport: Transport,
+        budget: BudgetGuard,
+        run_budget: RunBudget | None = None,
+    ):
         self.settings, self.transport, self.budget = settings, transport, budget
+        self.run_budget = run_budget or RunBudget(settings)
 
     async def call(self, request: ModelRequest) -> ModelResponse:
         supported = {"muse-spark": "text", "sam-3.1": "segmentation"}
@@ -78,7 +109,12 @@ class ModelRouter:
             terminal = False
             try:
                 if not binding:
-                    record["error_code"] = "UNSUPPORTED_CAPABILITY"
+                    record["error_code"] = (
+                        "NOT_CONFIGURED"
+                        if provider == ProviderId.MODAL
+                        and request.logical_model == "muse-spark"
+                        else "UNSUPPORTED_CAPABILITY"
+                    )
                 elif not credentials[provider]:
                     record["error_code"] = "MISSING_CREDENTIALS"
                 else:
@@ -90,6 +126,12 @@ class ModelRouter:
                         record["error_code"] = "BUDGET_EXHAUSTED"
                     else:
                         try:
+                            self.run_budget.reserve(effective or 0)
+                            if provider.value in {
+                                p.strip()
+                                for p in self.settings.force_fail_providers.split(",")
+                            }:
+                                raise ProviderError("FORCED_FAILURE")
                             reply = await self.transport.invoke(binding, normalized)
                             if (
                                 not isinstance(reply, ProviderReply)
@@ -102,7 +144,13 @@ class ModelRouter:
                                     k: v
                                     for k, v in (reply.usage or {}).items()
                                     if k
-                                    in {"input_tokens", "output_tokens", "total_tokens"}
+                                    in {
+                                        "input_tokens",
+                                        "output_tokens",
+                                        "prompt_tokens",
+                                        "completion_tokens",
+                                        "total_tokens",
+                                    }
                                     and isinstance(v, int)
                                     and not isinstance(v, bool)
                                     and v >= 0
@@ -116,6 +164,9 @@ class ModelRouter:
                         except ProviderError as exc:
                             safe_codes = {
                                 "TIMEOUT",
+                                "FORCED_FAILURE",
+                                "EMPTY_CONTENT_LENGTH",
+                                "RUN_BUDGET_EXCEEDED",
                                 "CONNECTION_ERROR",
                                 "RATE_LIMITED",
                                 "PROVIDER_5XX",
@@ -132,6 +183,8 @@ class ModelRouter:
                             record.update(status="failed", error_code=code)
                             terminal = code not in {
                                 "TIMEOUT",
+                                "FORCED_FAILURE",
+                                "EMPTY_CONTENT_LENGTH",
                                 "CONNECTION_ERROR",
                                 "RATE_LIMITED",
                                 "PROVIDER_5XX",
