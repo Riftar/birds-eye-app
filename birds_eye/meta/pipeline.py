@@ -15,6 +15,9 @@ async def run_meta(ctx: RunContext, router: ModelRouter) -> RunResult:
                 "output": content_plan.summary,
                 "attempts": content_plan.attempts,
                 "truncated": content_plan.attempts[-1]["truncated"],
+                "structured": content_plan.structured,
+                "prompt_version": content_plan.prompt_version,
+                "parse_error": content_plan.parse_error,
             }
         )
         stage = "Writer"
@@ -25,6 +28,9 @@ async def run_meta(ctx: RunContext, router: ModelRouter) -> RunResult:
                 "output": draft.content,
                 "attempts": draft.attempts,
                 "truncated": draft.attempts[-1]["truncated"],
+                "structured": draft.structured,
+                "prompt_version": draft.prompt_version,
+                "parse_error": draft.parse_error,
             }
         )
         stage = "Reviewer"
@@ -37,6 +43,9 @@ async def run_meta(ctx: RunContext, router: ModelRouter) -> RunResult:
                 "truncated": verdict.attempts[-1]["truncated"],
                 "decision": verdict.decision,
                 "findings": [f.model_dump() for f in verdict.findings],
+                "structured": verdict.structured,
+                "prompt_version": verdict.prompt_version,
+                "parse_error": verdict.parse_error,
             }
         )
     except RoutingError as exc:
