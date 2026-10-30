@@ -1,0 +1,5 @@
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "<0f>1<|box;x1=10;y1=20;x2=110;y2=120;w=100;h=100|><|mask;x=0;y=0;data=3,4,~FAKELOSSLESSPAYLOAD|>"}
+
+event: response.completed
+data: {"type": "response.completed", "response": {"id": "resp_mock", "status": "completed"}}

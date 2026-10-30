@@ -37,3 +37,5 @@ class Settings(BaseSettings):
     baseten_budget_cap_usd: Decimal | None = Field(default=None, ge=0)
     provider_timeout_seconds: float = Field(default=120, gt=0)
     muse_max_tokens_default: int = Field(default=2000, ge=400)
+    sam_mask_encoding: Literal["lossless", "one_bit"] | None = None
+    sam_include_confidence: bool = False

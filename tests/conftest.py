@@ -37,6 +37,8 @@ def settings(monkeypatch):
         "META_MODEL_API_BASE_URL",
         "MODAL_MUSE_ENDPOINT",
         "META_REASONING_EFFORT",
+        "SAM_MASK_ENCODING",
+        "SAM_INCLUDE_CONFIDENCE",
     ):
         monkeypatch.delenv(name, raising=False)
     return Settings(provider_max_retries=0)
