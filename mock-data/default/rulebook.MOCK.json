@@ -1,0 +1,19 @@
+{
+  "schema_version": "1",
+  "label": "MOCK creator rulebook",
+  "voice": "MOCK friendly, practical, and playful; use plain language.",
+  "formats": [
+    "MOCK vertical short video with a hook and closing prompt",
+    "MOCK carousel with one idea per slide"
+  ],
+  "prohibited_claims": [
+    "MOCK guaranteed audience growth",
+    "MOCK invented customer testimonials",
+    "MOCK unsupported product outcomes"
+  ],
+  "review_rules": {
+    "MOCK-RULE-01": "MOCK check each product claim against the product sheet.",
+    "MOCK-RULE-02": "MOCK keep each carousel slide focused on one idea.",
+    "MOCK-RULE-03": "MOCK reject prohibited claims and request a revision."
+  }
+}
