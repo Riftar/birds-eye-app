@@ -10,7 +10,13 @@ from birds_eye.core.inputs import load_inputs, make_context
 from birds_eye.meta.agents import parse_structured
 from birds_eye.meta.pipeline import run_meta
 from birds_eye.meta.prompts import load_prompts
-from birds_eye.meta.schemas import ContentPlanOut, DraftOut, VerdictOut
+from birds_eye.meta.schemas import (
+    ContentPlanOut,
+    DraftOut,
+    FindingOut,
+    VerdictOut,
+    strict_json_schema,
+)
 from birds_eye.providers.contracts import (
     ModelBinding,
     ModelRequest,
@@ -56,6 +62,7 @@ def _schema_request(**kwargs):
         max_tokens=4000,
         json_schema_name="content_plan",
         json_schema=ContentPlanOut.model_json_schema(),
+        meta_json_schema=strict_json_schema(ContentPlanOut),
         **kwargs,
     )
 
@@ -92,8 +99,8 @@ async def test_meta_request_has_response_format_json_schema(settings):
     response_format = seen["body"]["response_format"]
     assert response_format["type"] == "json_schema"
     assert response_format["json_schema"]["name"] == "content_plan"
-    assert (
-        response_format["json_schema"]["schema"] == ContentPlanOut.model_json_schema()
+    assert response_format["json_schema"]["schema"] == strict_json_schema(
+        ContentPlanOut
     )
     assert response_format["json_schema"]["strict"] is True
 
@@ -226,3 +233,120 @@ async def test_user_brief_still_in_all_prompts_and_no_mock_brand(settings):
         assert brief in request.prompt
         assert mock["creator"] not in request.prompt
     assert all(s["prompt_version"] >= 1 for s in result.stages)
+
+
+def _schema_nodes(node):
+    yield node
+    for key in ("properties", "$defs"):
+        for child in node.get(key, {}).values():
+            yield from _schema_nodes(child)
+    if isinstance(node.get("items"), dict):
+        yield from _schema_nodes(node["items"])
+    for child in node.get("anyOf", []):
+        yield from _schema_nodes(child)
+
+
+@pytest.mark.parametrize("model", [ContentPlanOut, DraftOut, VerdictOut])
+def test_strict_schema_every_object_has_additionalProperties_false(model):
+    for node in _schema_nodes(strict_json_schema(model)):
+        if node.get("type") == "object":
+            assert node["additionalProperties"] is False
+        assert "title" not in node and "default" not in node
+
+
+@pytest.mark.parametrize("model", [ContentPlanOut, DraftOut, VerdictOut])
+def test_strict_schema_required_lists_all_properties(model):
+    for node in _schema_nodes(strict_json_schema(model)):
+        if node.get("type") == "object":
+            assert node["required"] == list(node.get("properties", {}))
+
+
+@pytest.mark.parametrize("model", [ContentPlanOut, DraftOut, VerdictOut])
+def test_strict_schema_no_root_combinators_and_no_oneOf_allOf(model):
+    schema = strict_json_schema(model)
+    assert not {"anyOf", "oneOf", "allOf", "enum", "not"} & schema.keys()
+    for node in _schema_nodes(schema):
+        assert not {"oneOf", "allOf"} & node.keys()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("strict", [True, False])
+async def test_strict_flag_configurable(settings, strict):
+    settings.model_api_key = SecretStr("fake")
+    settings.meta_structured_strict = strict
+    seen = {}
+
+    def handler(request):
+        seen.update(json.loads(request.content))
+        return _ok_response()
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        await LiveTransport(settings, client).invoke(
+            ModelBinding(
+                logical_model="muse-spark",
+                provider=ProviderId.META,
+                concrete_model="muse-spark-1.3-contributor",
+                operation="text",
+            ),
+            _schema_request(),
+        )
+    assert seen["response_format"]["json_schema"]["strict"] is strict
+
+
+@pytest.mark.asyncio
+async def test_meta_request_uses_strict_schema(settings):
+    settings.model_api_key = SecretStr("fake")
+    seen = []
+
+    def handler(request):
+        seen.append(json.loads(request.content))
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": PLAN_JSON}}]}
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        from birds_eye.meta.agents import plan
+
+        await plan(
+            make_context(load_inputs(settings.default_scenario_dir)),
+            ModelRouter(settings, LiveTransport(settings, client), FakeBudgetGuard()),
+        )
+    assert seen[0]["response_format"]["json_schema"]["schema"] == strict_json_schema(
+        ContentPlanOut
+    )
+
+
+@pytest.mark.asyncio
+async def test_contributor_model_still_gets_response_format(settings):
+    settings.model_api_key = SecretStr("fake")
+    seen = {}
+
+    def handler(request):
+        seen.update(json.loads(request.content))
+        return _ok_response()
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        await LiveTransport(settings, client).invoke(
+            ModelBinding(
+                logical_model="muse-spark",
+                provider=ProviderId.META,
+                concrete_model="muse-spark-1.3-contributor",
+                operation="text",
+            ),
+            _schema_request(),
+        )
+    assert seen["response_format"]["json_schema"]["schema"] == strict_json_schema(
+        ContentPlanOut
+    )
+
+
+def test_model_validate_accepts_null_optional_fields():
+    plan = json.loads(PLAN_JSON)
+    plan["segment_subject"] = None
+    assert ContentPlanOut.model_validate(plan).segment_subject is None
+    assert (
+        FindingOut.model_validate({"rule_id": None, "message": "MOCK"}).rule_id is None
+    )
+    assert strict_json_schema(ContentPlanOut)["properties"]["segment_subject"][
+        "anyOf"
+    ] == [{"type": "string"}, {"type": "null"}]

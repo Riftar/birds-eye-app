@@ -74,8 +74,8 @@ class LiveTransport:
                 "type": "json_schema",
                 "json_schema": {
                     "name": request.json_schema_name or request.stage,
-                    "schema": request.json_schema,
-                    "strict": True,
+                    "schema": request.meta_json_schema or request.json_schema,
+                    "strict": self.settings.meta_structured_strict,
                 },
             }
         try:

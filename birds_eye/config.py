@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     provider_mode: Literal["stub", "live"] = "stub"
     baseten_base_url: str = "https://inference.baseten.co/v1"
     meta_model_api_base_url: str = "https://api.meta.ai/v1"
+    meta_structured_strict: bool = True
     modal_muse_endpoint: str | None = None
     force_fail_providers: str = ""
     reasoning_effort: Literal["minimal", "low", "medium", "high", "xhigh"] = "low"

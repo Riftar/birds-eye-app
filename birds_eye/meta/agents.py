@@ -11,7 +11,12 @@ from birds_eye.core.contracts import (
     RunContext,
 )
 from birds_eye.meta.prompts import load_prompts
-from birds_eye.meta.schemas import ContentPlanOut, DraftOut, VerdictOut
+from birds_eye.meta.schemas import (
+    ContentPlanOut,
+    DraftOut,
+    VerdictOut,
+    strict_json_schema,
+)
 from birds_eye.providers.contracts import ModelRequest
 from birds_eye.providers.router import ModelRouter
 
@@ -70,6 +75,7 @@ async def call(ctx, router, stage, inputs, extra=""):
             max_tokens=getattr(router.settings, f"{stage}_max_tokens"),
             json_schema_name=schema_name,
             json_schema=schema_model.model_json_schema(),
+            meta_json_schema=strict_json_schema(schema_model),
         )
     )
 

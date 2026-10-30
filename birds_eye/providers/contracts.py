@@ -32,6 +32,7 @@ class ModelRequest(BaseModel):
     max_cost_usd: Decimal = Field(default=Decimal(0), ge=0)
     json_schema_name: str | None = None
     json_schema: dict | None = None
+    meta_json_schema: dict | None = None
 
 
 class ProviderReply(BaseModel):
