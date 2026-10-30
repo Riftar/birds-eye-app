@@ -1,0 +1,14 @@
+{
+  "schema_version": "1",
+  "label": "MOCK product sheet",
+  "offerings": [
+    "MOCK Spark Notebook: a fictional idea journal",
+    "MOCK Frame Kit: fictional carousel templates",
+    "MOCK Clip Cards: fictional video planning cards"
+  ],
+  "supported_claims": {
+    "MOCK-CLAIM-01": "MOCK Spark Notebook includes imaginary prompts.",
+    "MOCK-CLAIM-02": "MOCK Frame Kit contains fictional five-slide layouts.",
+    "MOCK-CLAIM-03": "MOCK Clip Cards help organize a fictional shot list."
+  }
+}

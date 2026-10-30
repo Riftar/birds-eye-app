@@ -78,4 +78,41 @@ This is not a hypothetical tool. Birds Eye industrializes a content pipeline I r
 
 ## Status
 
-Active development for the Meta AI Hackathon. This repository currently carries the project pitch; implementation code lands as the hackathon build progresses.
+Meta 01 provides shared contracts, input loading, lifecycle validation, provider routing and two API entry points. Agent stages and both pipelines are explicit stubs; paid integrations are disabled.
+
+
+## Built during the hackathon (event-start)
+
+The Meta AI Hackathon kicked off Monday 26 Oct 2026, 12:00 PM ET (23:00 WIB). The repo's first commit `8322282` landed at 23:47 WIB that night. The `event-start` git tag marks that commit, so everything in the repo was built during the event (shared core included).
+
+## Model usage
+
+Muse Spark is intended to drive Planner, Writer and Reviewer; SAM 3.1 segments creator images and video frames. Logical IDs remain stable as routing selects Baseten, Modal, then Meta Model API, filtered by capabilities and credentials. SAM is configured only for Meta Model API. Muse text calls have a 400-token minimum. Attempt metadata is returned and logged with model and provider attribution; credentials and inputs are excluded. Muse Voice Transcribe and Muse Image are future scope. Paid integrations are disabled.
+
+## Architecture/layout
+
+`birds_eye/core` holds shared inputs and lifecycle validation; `birds_eye/providers` holds routing contracts and disabled transport; `birds_eye/meta` and `birds_eye/tencent` expose the two boundaries in one FastAPI app. `mock-data/default` contains a fake creator scenario. Inputs are read afresh for each run and retained as a snapshot. Git-backed artifacts, durable claims, authenticated decisions, scheduling and publishing are future work. Reviewer approval permits review passage, never human approval; revisions stay in review.
+
+Budget caps are configuration placeholders. Paid transports require durable reservations, pricing or maximum-cost estimates, and reconciliation of uncertain charges. Meta 02–04 implement agents, Meta 05 orchestration and UI, Meta 06 inputs, Meta 07 Muse integrations and accounting, and Meta 08 SAM.
+
+## Setup and commands
+
+Requires Python 3.11+ and `uv`; no provider credentials are needed for the scaffold or tests.
+
+```bash
+uv sync --frozen --extra dev
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest -q
+uv run uvicorn birds_eye.app:create_app --factory --host 0.0.0.0 --port 8000
+```
+
+The Dockerfile runs the same factory with one worker and a configurable `PORT`. Credentials are read from environment variables as secrets.
+
+## Entry points
+
+`GET /healthz`, `GET /meta` and `GET /tencent` expose health and placeholder metadata. `POST /meta/runs` and `POST /tencent/runs` accept the same optional inputs or load the configured scenario; both validate inputs and return explicit 501 responses. WorkBuddy owns the Tencent pipeline and will connect it through the shared boundary. HTTP clients cannot supply scenario paths.
+
+## Deadlines
+
+Meta: **5 Nov 2026, 09:00 WIB**. Tencent: **7 Nov 2026**.
