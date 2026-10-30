@@ -1,10 +1,12 @@
 import asyncio
 import random
 import time
+from decimal import Decimal
 
 import httpx
 
 from birds_eye.config import Settings
+from birds_eye.providers.budget import LedgerBudgetGuard
 from birds_eye.providers.contracts import (
     BudgetGuard,
     ModelRequest,
@@ -168,6 +170,7 @@ class ModelRouter:
                     "reasoning_effort": effort,
                     "usage": None,
                     "cost_usd": None,
+                    "ledger_total_usd": None,
                     "finish_reason": None,
                     "truncated": False,
                 }
@@ -188,11 +191,19 @@ class ModelRouter:
                         record["error_code"] = "MISSING_CREDENTIALS"
                     else:
                         try:
-                            reservation = await self.budget.reserve(
-                                provider, request.max_cost_usd
-                            )
-                        except ProviderError:
-                            record["error_code"] = "BUDGET_EXHAUSTED"
+                            max_cost = request.max_cost_usd
+                            if isinstance(self.budget, LedgerBudgetGuard):
+                                input_price, output_price = self.budget.prices(provider)
+                                prompt_tokens = (
+                                    len(request.prompt + request.instructions) + 2
+                                ) // 3
+                                max_cost = (
+                                    prompt_tokens * input_price
+                                    + effective * output_price
+                                ) / Decimal(1_000_000)
+                            reservation = await self.budget.reserve(provider, max_cost)
+                        except ProviderError as exc:
+                            record["error_code"] = exc.code
                         else:
                             reserved = self.run_budget.reserve(effective)
                             record["effective_max_tokens"] = record[
@@ -243,12 +254,25 @@ class ModelRouter:
                             reserved, usage, record["error_code"] == "TIMEOUT"
                         )
                     if reservation is not None:
-                        await self.budget.settle(
-                            reservation,
-                            reply.cost_usd
-                            if isinstance(reply, ProviderReply)
-                            else None,
-                        )
+                        if isinstance(self.budget, LedgerBudgetGuard):
+                            cost = await self.budget.settle_attempt(
+                                reservation,
+                                request,
+                                binding.concrete_model,
+                                usage,
+                                record["status"],
+                                record["error_code"],
+                            )
+                            record["cost_usd"] = str(cost)
+                        else:
+                            await self.budget.settle(
+                                reservation,
+                                reply.cost_usd
+                                if isinstance(reply, ProviderReply)
+                                else None,
+                            )
+                    if isinstance(self.budget, LedgerBudgetGuard):
+                        record["ledger_total_usd"] = str(self.budget.totals[provider])
                     record["latency_ms"] = round((time.monotonic() - start) * 1000, 3)
                     records.append(record)
                     log_attempt(record)
@@ -270,6 +294,16 @@ class ModelRouter:
                     * (2**retry)
                     * (1 + self.jitter())
                 )
+        eligible = [
+            r
+            for r in records
+            if r["error_code"]
+            not in {"MISSING_CREDENTIALS", "NOT_CONFIGURED", "UNSUPPORTED_CAPABILITY"}
+        ]
+        if eligible and all(r["error_code"] == "BUDGET_EXHAUSTED" for r in eligible):
+            raise RoutingError(
+                "PROVIDER_BUDGET_EXHAUSTED", "Provider budget exhausted.", records
+            )
         raise RoutingError(
             "PROVIDERS_EXHAUSTED", "No provider could complete the request.", records
         )

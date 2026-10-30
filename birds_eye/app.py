@@ -20,6 +20,10 @@ async def lifespan(app: FastAPI):
 def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(lifespan=lifespan)
     app.state.settings = settings or Settings()
+    from birds_eye.providers.budget import LedgerBudgetGuard
+
+    app.state.budget = LedgerBudgetGuard(app.state.settings)
+    app.state.ledger = app.state.budget.summary()
     app.include_router(meta_router)
     app.include_router(tencent_router)
 
