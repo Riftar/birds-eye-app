@@ -1,11 +1,12 @@
 import fcntl
 import json
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 
 from birds_eye.config import Settings
 from birds_eye.providers.contracts import ProviderError, ProviderId, Reservation
+from birds_eye.providers.logging import logger
 
 
 class LedgerBudgetGuard:
@@ -16,11 +17,27 @@ class LedgerBudgetGuard:
         self.totals = {provider: Decimal(0) for provider in ProviderId}
         if self.path.exists():
             with self.path.open() as ledger:
-                for line in ledger:
-                    entry = json.loads(line)
-                    self.totals[ProviderId(entry["provider"])] += Decimal(
-                        str(entry["cost_usd"])
-                    )
+                fcntl.flock(ledger, fcntl.LOCK_SH)
+                try:
+                    for line_no, line in enumerate(ledger, 1):
+                        if not line.strip():
+                            continue
+                        try:
+                            entry = json.loads(line)
+                            provider = ProviderId(entry["provider"])
+                            cost = Decimal(str(entry["cost_usd"]))
+                            if not cost.is_finite() or cost < 0:
+                                raise ValueError("Invalid cost")
+                        except (ValueError, TypeError, KeyError, InvalidOperation):
+                            logger.warning(
+                                json.dumps(
+                                    {"event": "ledger_corrupt_line", "line_no": line_no}
+                                )
+                            )
+                            continue
+                        self.totals[provider] += cost
+                finally:
+                    fcntl.flock(ledger, fcntl.LOCK_UN)
 
     def prices(self, provider):
         prefix = f"price_{provider.value}"

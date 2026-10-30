@@ -10,7 +10,49 @@ from birds_eye.app import create_app
 from birds_eye.config import Settings
 from birds_eye.providers.budget import LedgerBudgetGuard
 from birds_eye.providers.contracts import ProviderId, ProviderReply
-from birds_eye.providers.router import ModelRouter
+from birds_eye.providers.router import ModelRouter, NoCostBudget
+
+
+def test_stub_mode_uses_no_cost_budget(settings):
+    settings.provider_mode = "stub"
+    settings.ledger_path.write_text("invalid ledger")
+    app = create_app(settings)
+    assert isinstance(app.state.budget, NoCostBudget)
+    with TestClient(app) as client:
+        assert client.get("/healthz").status_code == 200
+        assert (
+            client.post("/meta/runs", json={"brief": "MOCK brief"}).status_code == 501
+        )
+
+
+def test_live_mode_uses_ledger_guard(settings):
+    settings.provider_mode = "live"
+    app = create_app(settings)
+    assert isinstance(app.state.budget, LedgerBudgetGuard)
+    with TestClient(app) as client:
+        assert client.get("/healthz").status_code == 200
+
+
+def test_corrupt_ledger_line_is_skipped_and_counted_valid_lines(
+    ledger_settings, monkeypatch
+):
+    from birds_eye.providers.logging import logger
+
+    ledger_settings.ledger_path.write_text(
+        '{"provider":"baseten","cost_usd":"1.25"}\n'
+        '\n{"private":"partial secret"\n'
+        '{"provider":"modal","cost_usd":"2.5"}\n'
+        '{"provider":"baseten","cost_usd":"bad"}\n'
+    )
+    warnings = []
+    monkeypatch.setattr(logger, "warning", warnings.append)
+    guard = LedgerBudgetGuard(ledger_settings)
+    assert guard.totals[ProviderId.BASETEN] == Decimal("1.25")
+    assert guard.totals[ProviderId.MODAL] == Decimal("2.5")
+    assert [json.loads(warning) for warning in warnings] == [
+        {"event": "ledger_corrupt_line", "line_no": 3},
+        {"event": "ledger_corrupt_line", "line_no": 5},
+    ]
 
 
 @pytest.fixture
