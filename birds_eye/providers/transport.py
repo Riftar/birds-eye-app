@@ -1,3 +1,5 @@
+import json
+
 from birds_eye.providers.contracts import (
     ModelBinding,
     ModelRequest,
@@ -44,10 +46,20 @@ class LiveTransport:
         url, key = configs[binding.provider]
         if not url or not key:
             raise ProviderError("CONFIGURATION_ERROR")
+        developer_content = request.instructions
+        if request.json_schema and binding.provider != ProviderId.META:
+            # Baseten docs: Muse Spark Open does not support structured
+            # outputs, so the schema is appended to the developer message
+            # instead of using response_format.
+            developer_content = (
+                developer_content
+                + "\n\nReturn only JSON matching this schema:\n"
+                + json.dumps(request.json_schema)
+            )
         body = {
             "model": binding.concrete_model,
             "messages": [
-                {"role": "developer", "content": request.instructions},
+                {"role": "developer", "content": developer_content},
                 {"role": "user", "content": request.prompt},
             ],
             "max_completion_tokens": request.max_tokens,
@@ -57,6 +69,15 @@ class LiveTransport:
             if binding.provider == ProviderId.META
             else self.settings.reasoning_effort,
         }
+        if request.json_schema and binding.provider == ProviderId.META:
+            body["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": request.json_schema_name or request.stage,
+                    "schema": request.meta_json_schema or request.json_schema,
+                    "strict": self.settings.meta_structured_strict,
+                },
+            }
         try:
             if self.client is not None:
                 response = await self.client.post(

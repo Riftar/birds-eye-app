@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     provider_mode: Literal["stub", "live"] = "stub"
     baseten_base_url: str = "https://inference.baseten.co/v1"
     meta_model_api_base_url: str = "https://api.meta.ai/v1"
+    meta_structured_strict: bool = True
     meta_muse_model: str = "muse-spark-1.3-contributor"
     meta_contributor_rpm: int = Field(default=150, ge=1)
     modal_muse_endpoint: str | None = None

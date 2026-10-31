@@ -1,6 +1,8 @@
 import json
 import re
 
+from pydantic import BaseModel, ValidationError
+
 from birds_eye.core.contracts import (
     ContentPlan,
     Draft,
@@ -8,8 +10,24 @@ from birds_eye.core.contracts import (
     ReviewVerdict,
     RunContext,
 )
+from birds_eye.meta.prompts import load_prompts
+from birds_eye.meta.schemas import (
+    ContentPlanOut,
+    DraftOut,
+    VerdictOut,
+    strict_json_schema,
+)
 from birds_eye.providers.contracts import ModelRequest
 from birds_eye.providers.router import ModelRouter
+
+# Versioned stage prompts, loaded once at startup.
+PROMPTS = load_prompts()
+
+SCHEMAS: dict[str, tuple[str, type[BaseModel]]] = {
+    "planner": ("content_plan", ContentPlanOut),
+    "writer": ("draft", DraftOut),
+    "reviewer": ("verdict", VerdictOut),
+}
 
 
 def context_text(ctx):
@@ -25,7 +43,26 @@ def context_text(ctx):
     )
 
 
-async def call(ctx, router, stage, instructions, inputs):
+def parse_structured(model: type[BaseModel], text: str) -> tuple[dict | None, bool]:
+    """Parse model output into a typed schema.
+
+    Returns (structured_dict, parse_error). On failure the raw text is kept
+    by the caller with structured=None and parse_error=True; never raises.
+    """
+    try:
+        return model.model_validate_json(text).model_dump(mode="json"), False
+    except ValidationError:
+        pass
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.IGNORECASE)
+    try:
+        return model.model_validate_json(cleaned).model_dump(mode="json"), False
+    except ValidationError:
+        return None, True
+
+
+async def call(ctx, router, stage, inputs, extra=""):
+    prompt = PROMPTS[stage]
+    schema_name, schema_model = SCHEMAS[stage]
     return await router.call(
         ModelRequest(
             run_id=str(ctx.run_id),
@@ -34,9 +71,11 @@ async def call(ctx, router, stage, instructions, inputs):
             logical_model="muse-spark",
             operation="text",
             prompt=inputs,
-            instructions=instructions
-            + " The creator brief defines the business, brand, product, audience and format. The product sheet and rulebook only add constraints where applicable; never replace the brief's brand or subject.",
+            instructions=prompt["text"] + extra,
             max_tokens=getattr(router.settings, f"{stage}_max_tokens"),
+            json_schema_name=schema_name,
+            json_schema=schema_model.model_json_schema(),
+            meta_json_schema=strict_json_schema(schema_model),
         )
     )
 
@@ -46,10 +85,16 @@ async def plan(ctx: RunContext, router: ModelRouter) -> ContentPlan:
         ctx,
         router,
         "planner",
-        "Create a concise plan in short labelled sections: hook, format, key points, CTA. At most 150 words.",
         context_text(ctx),
     )
-    return ContentPlan(summary=response.output, attempts=response.metadata)
+    structured, parse_error = parse_structured(ContentPlanOut, response.output)
+    return ContentPlan(
+        summary=response.output,
+        attempts=response.metadata,
+        structured=structured,
+        prompt_version=PROMPTS["planner"]["version"],
+        parse_error=parse_error,
+    )
 
 
 async def write(
@@ -67,10 +112,16 @@ async def write(
         ctx,
         router,
         "writer",
-        "Write the final script or slides, at most 180 words. Return only the draft.",
         inputs,
     )
-    return Draft(content=response.output, attempts=response.metadata)
+    structured, parse_error = parse_structured(DraftOut, response.output)
+    return Draft(
+        content=response.output,
+        attempts=response.metadata,
+        structured=structured,
+        prompt_version=PROMPTS["writer"]["version"],
+        parse_error=parse_error,
+    )
 
 
 async def review(
@@ -80,13 +131,25 @@ async def review(
         ctx,
         router,
         "reviewer",
-        'Check the draft against the creator brief first, then the rulebook and product sheet. Output only compact JSON {"decision":"approve"|"revise","findings":[...]}, at most 4 findings of at most 20 words each. No markdown.',
         context_text(ctx) + f"\n\nDraft: {draft.content}",
     )
-    return parse_verdict(response.output, response.metadata)
+    structured, parse_error = parse_structured(VerdictOut, response.output)
+    return parse_verdict(
+        response.output,
+        response.metadata,
+        structured=structured,
+        parse_error=parse_error,
+        prompt_version=PROMPTS["reviewer"]["version"],
+    )
 
 
-def parse_verdict(text: str, attempts: list[dict]) -> ReviewVerdict:
+def parse_verdict(
+    text: str,
+    attempts: list[dict],
+    structured: dict | None = None,
+    parse_error: bool = False,
+    prompt_version: int = 1,
+) -> ReviewVerdict:
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.IGNORECASE)
     try:
         data = json.loads(cleaned)
@@ -111,6 +174,9 @@ def parse_verdict(text: str, attempts: list[dict]) -> ReviewVerdict:
                 findings=[Finding(message=text)],
                 output=text,
                 attempts=attempts,
+                structured=structured,
+                prompt_version=prompt_version,
+                parse_error=parse_error,
             )
         decision = match.group(1).lower()
         findings = []
@@ -134,5 +200,11 @@ def parse_verdict(text: str, attempts: list[dict]) -> ReviewVerdict:
         separators=(",", ":"),
     )
     return ReviewVerdict(
-        decision=decision, findings=findings, output=output, attempts=attempts
+        decision=decision,
+        findings=findings,
+        output=output,
+        attempts=attempts,
+        structured=structured,
+        prompt_version=prompt_version,
+        parse_error=parse_error,
     )

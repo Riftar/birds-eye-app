@@ -71,6 +71,7 @@ def settings(monkeypatch, tmp_path):
         "META_MODEL_API_BASE_URL",
         "MODAL_MUSE_ENDPOINT",
         "META_REASONING_EFFORT",
+        "META_STRUCTURED_STRICT",
     ):
         monkeypatch.delenv(name, raising=False)
     return Settings(provider_max_retries=0, ledger_path=tmp_path / "ledger.jsonl")
