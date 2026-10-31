@@ -1,6 +1,7 @@
 import asyncio
 import random
 import time
+import weakref
 from decimal import Decimal
 
 import httpx
@@ -19,6 +20,31 @@ from birds_eye.providers.contracts import (
 )
 from birds_eye.providers.logging import log_attempt
 from birds_eye.providers.registry import bindings
+
+
+class AsyncRateLimiter:
+    def __init__(self, clock=time.monotonic, sleep=asyncio.sleep):
+        self.clock, self.sleep = clock, sleep
+        self.lock = asyncio.Lock()
+        self.next_slot = {}
+
+    async def acquire(self, model, rpm):
+        async with self.lock:
+            now = self.clock()
+            delay = max(0, self.next_slot.get(model, now) - now)
+            if delay:
+                await self.sleep(delay)
+            self.next_slot[model] = self.clock() + 60 / rpm
+
+
+_limiters = weakref.WeakKeyDictionary()
+
+
+def process_limiter():
+    loop = asyncio.get_running_loop()
+    if loop not in _limiters:
+        _limiters[loop] = AsyncRateLimiter()
+    return _limiters[loop]
 
 
 class RunBudget:
@@ -86,6 +112,11 @@ def safe_usage(usage):
         n = details.get("reasoning_tokens")
         if isinstance(n, int) and not isinstance(n, bool) and n >= 0:
             result["reasoning_tokens"] = n
+    details = usage.get("prompt_tokens_details")
+    if isinstance(details, dict):
+        n = details.get("cached_tokens")
+        if isinstance(n, int) and not isinstance(n, bool) and n >= 0:
+            result["prompt_tokens_details"] = {"cached_tokens": n}
     return result
 
 
@@ -193,14 +224,21 @@ class ModelRouter:
                         try:
                             max_cost = request.max_cost_usd
                             if isinstance(self.budget, LedgerBudgetGuard):
-                                input_price, output_price = self.budget.prices(provider)
-                                prompt_tokens = (
-                                    len(request.prompt + request.instructions) + 2
-                                ) // 3
-                                max_cost = (
-                                    prompt_tokens * input_price
-                                    + effective * output_price
-                                ) / Decimal(1_000_000)
+                                if request.operation == "segmentation":
+                                    max_cost = max(
+                                        max_cost, self.settings.sam_price_per_image_usd
+                                    )
+                                else:
+                                    input_price, _, output_price = self.budget.prices(
+                                        provider, binding.concrete_model
+                                    )
+                                    prompt_tokens = (
+                                        len(request.prompt + request.instructions) + 2
+                                    ) // 3
+                                    max_cost = (
+                                        prompt_tokens * input_price
+                                        + effective * output_price
+                                    ) / Decimal(1_000_000)
                             reservation = await self.budget.reserve(provider, max_cost)
                         except ProviderError as exc:
                             record["error_code"] = exc.code
@@ -214,6 +252,15 @@ class ModelRouter:
                                 for p in self.settings.force_fail_providers.split(",")
                             }:
                                 raise ProviderError("FORCED_FAILURE")
+                            if (
+                                provider == ProviderId.META
+                                and binding.concrete_model
+                                == "muse-spark-1.3-contributor"
+                            ):
+                                await process_limiter().acquire(
+                                    binding.concrete_model,
+                                    min(self.settings.meta_contributor_rpm, 140),
+                                )
                             reply = await self.transport.invoke(
                                 binding,
                                 request.model_copy(update={"max_tokens": reserved}),

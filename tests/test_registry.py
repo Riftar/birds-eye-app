@@ -8,7 +8,7 @@ def test_model_bindings_and_capabilities(configured_settings):
     assert [(m.provider, m.concrete_model, m.operation) for m in muse] == [
         (ProviderId.BASETEN, "meta-models/muse-spark-open-1026", "text"),
         (ProviderId.MODAL, "mock-modal-muse-deployment", "text"),
-        (ProviderId.META, "muse-spark-1.3", "text"),
+        (ProviderId.META, "muse-spark-1.3-contributor", "text"),
     ]
     sam = [m for m in models if m.logical_model == "sam-3.1"]
     assert [(m.provider, m.concrete_model, m.operation) for m in sam] == [

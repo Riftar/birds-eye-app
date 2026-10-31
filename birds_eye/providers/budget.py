@@ -8,6 +8,19 @@ from birds_eye.config import Settings
 from birds_eye.providers.contracts import ProviderError, ProviderId, Reservation
 from birds_eye.providers.logging import logger
 
+TEXT_PRICES = {
+    "muse-spark-1.3-contributor": (Decimal("0.10"), Decimal("0.002"), Decimal("0.20")),
+    "muse-spark-1.3": (Decimal("1.25"), Decimal("0.15"), Decimal("4.25")),
+    "meta-models/muse-spark-open-1026": (Decimal("1.25"), None, Decimal("4.25")),
+}
+IMAGE_PRICES = {"sam-3.1": Decimal("0.0025"), "muse-image-1.0": Decimal("0.01")}
+
+
+def cost_for_frames(frames: int) -> Decimal:
+    if frames < 0:
+        raise ValueError("Frame count must be nonnegative")
+    return Decimal(max(frames, 50)) * Decimal("0.20") / Decimal(1000)
+
 
 class LedgerBudgetGuard:
     def __init__(self, settings: Settings):
@@ -39,15 +52,25 @@ class LedgerBudgetGuard:
                 finally:
                     fcntl.flock(ledger, fcntl.LOCK_UN)
 
-    def prices(self, provider):
+    def prices(self, provider, model=None):
         prefix = f"price_{provider.value}"
-        prices = (
-            getattr(self.settings, prefix + "_input_per_mtok_usd"),
-            getattr(self.settings, prefix + "_output_per_mtok_usd"),
+        defaults = TEXT_PRICES.get(model, (None, None, None))
+        # Preserve provider overrides for existing deployments.
+        input_override = getattr(self.settings, prefix + "_input_per_mtok_usd")
+        output_override = getattr(self.settings, prefix + "_output_per_mtok_usd")
+        input_price = input_override if input_override is not None else defaults[0]
+        output_price = output_override if output_override is not None else defaults[2]
+        cached_override = getattr(
+            self.settings, prefix + "_cached_input_per_mtok_usd", None
         )
-        if None in prices:
+        cached_price = cached_override if cached_override is not None else defaults[1]
+        if input_price is None or output_price is None:
             raise ProviderError("PRICE_NOT_CONFIGURED")
-        return prices
+        return (
+            input_price,
+            cached_price if cached_price is not None else input_price,
+            output_price,
+        )
 
     def cap(self, provider):
         return getattr(self.settings, f"{provider.value}_budget_cap_usd")
@@ -62,7 +85,6 @@ class LedgerBudgetGuard:
         }
 
     async def reserve(self, provider, max_cost_usd):
-        self.prices(provider)
         cap = self.cap(provider)
         pending = sum(
             (cost for p, cost in self.open.values() if p == provider), Decimal(0)
@@ -88,10 +110,20 @@ class LedgerBudgetGuard:
             for n in (prompt, completion)
         )
         if valid:
-            input_price, output_price = self.prices(provider)
-            cost = (prompt * input_price + completion * output_price) / Decimal(
-                1_000_000
-            )
+            input_price, cached_price, output_price = self.prices(provider, model)
+            details = usage.get("prompt_tokens_details")
+            cached = details.get("cached_tokens") if isinstance(details, dict) else 0
+            if (
+                not isinstance(cached, int)
+                or isinstance(cached, bool)
+                or not 0 <= cached <= prompt
+            ):
+                cached = 0
+            cost = (
+                (prompt - cached) * input_price
+                + cached * cached_price
+                + completion * output_price
+            ) / Decimal(1_000_000)
         elif status == "success" or error_code == "TIMEOUT":
             cost = worst
         else:

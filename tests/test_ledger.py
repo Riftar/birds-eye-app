@@ -137,6 +137,7 @@ async def test_timeout_keeps_worst_case_failure_releases(ledger_settings, muse_r
 @pytest.mark.asyncio
 async def test_price_not_configured_is_recorded_skip(ledger_settings, muse_request):
     ledger_settings.baseten_budget_cap_usd = Decimal(0)
+    ledger_settings.meta_muse_model = "unknown-model"
     ledger_settings.price_meta_model_api_input_per_mtok_usd = None
     from birds_eye.providers.contracts import RoutingError
 
