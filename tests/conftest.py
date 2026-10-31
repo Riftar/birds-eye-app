@@ -40,6 +40,19 @@ def no_network(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect_ex", blocked)
 
 
+@pytest.fixture(autouse=True)
+def fake_rate_limiter(monkeypatch):
+    from birds_eye.providers.router import AsyncRateLimiter
+
+    now = [0.0]
+
+    async def sleep(delay):
+        now[0] += delay
+
+    limiter = AsyncRateLimiter(clock=lambda: now[0], sleep=sleep)
+    monkeypatch.setattr("birds_eye.providers.router.process_limiter", lambda: limiter)
+
+
 @pytest.fixture
 def settings(monkeypatch, tmp_path):
     for name in (
