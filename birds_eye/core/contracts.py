@@ -47,11 +47,17 @@ class RunContext(BaseModel):
 class ContentPlan(BaseModel):
     summary: str
     attempts: list[dict] = Field(default_factory=list)
+    structured: dict | None = None
+    prompt_version: int = 1
+    parse_error: bool = False
 
 
 class Draft(BaseModel):
     content: str
     attempts: list[dict] = Field(default_factory=list)
+    structured: dict | None = None
+    prompt_version: int = 1
+    parse_error: bool = False
 
 
 class Finding(BaseModel):
@@ -65,6 +71,9 @@ class ReviewVerdict(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
     output: str = ""
     attempts: list[dict] = Field(default_factory=list)
+    structured: dict | None = None
+    prompt_version: int = 1
+    parse_error: bool = False
 
 
 class StageEvent(BaseModel):

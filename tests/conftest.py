@@ -1,3 +1,4 @@
+import hashlib
 import shutil
 import socket
 from collections import deque
@@ -11,6 +12,26 @@ from birds_eye.providers.contracts import ModelRequest, ProviderError, Reservati
 
 
 @pytest.fixture(autouse=True)
+def test_suite_never_touches_repo_ledger():
+    path = Path(__file__).resolve().parent.parent / "var" / "ledger.jsonl"
+
+    def snapshot():
+        if not path.exists():
+            return None
+        stat = path.stat()
+        return (
+            stat.st_ino,
+            stat.st_size,
+            stat.st_mtime_ns,
+            hashlib.sha256(path.read_bytes()).digest(),
+        )
+
+    before = snapshot()
+    yield
+    assert snapshot() == before, "Tests created or modified the repository ledger"
+
+
+@pytest.fixture(autouse=True)
 def no_network(monkeypatch):
     def blocked(*args, **kwargs):
         raise AssertionError("Tests must not use network connections")
@@ -19,8 +40,21 @@ def no_network(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect_ex", blocked)
 
 
+@pytest.fixture(autouse=True)
+def fake_rate_limiter(monkeypatch):
+    from birds_eye.providers.router import AsyncRateLimiter
+
+    now = [0.0]
+
+    async def sleep(delay):
+        now[0] += delay
+
+    limiter = AsyncRateLimiter(clock=lambda: now[0], sleep=sleep)
+    monkeypatch.setattr("birds_eye.providers.router.process_limiter", lambda: limiter)
+
+
 @pytest.fixture
-def settings(monkeypatch):
+def settings(monkeypatch, tmp_path):
     for name in (
         "BASETEN_API_KEY",
         "MODAL_TOKEN_ID",
@@ -39,9 +73,10 @@ def settings(monkeypatch):
         "META_REASONING_EFFORT",
         "SAM_MASK_ENCODING",
         "SAM_INCLUDE_CONFIDENCE",
+        "META_STRUCTURED_STRICT",
     ):
         monkeypatch.delenv(name, raising=False)
-    return Settings(provider_max_retries=0)
+    return Settings(provider_max_retries=0, ledger_path=tmp_path / "ledger.jsonl")
 
 
 @pytest.fixture
