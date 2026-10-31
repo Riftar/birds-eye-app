@@ -71,6 +71,8 @@ def settings(monkeypatch, tmp_path):
         "META_MODEL_API_BASE_URL",
         "MODAL_MUSE_ENDPOINT",
         "META_REASONING_EFFORT",
+        "SAM_MASK_ENCODING",
+        "SAM_INCLUDE_CONFIDENCE",
         "META_STRUCTURED_STRICT",
     ):
         monkeypatch.delenv(name, raising=False)

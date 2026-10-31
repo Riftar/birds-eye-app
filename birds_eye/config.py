@@ -51,3 +51,5 @@ class Settings(BaseSettings):
     sam_price_per_image_usd: Decimal = Field(default=Decimal("0.0025"), ge=0)
     provider_timeout_seconds: float = Field(default=120, gt=0)
     muse_max_tokens_default: int = Field(default=2000, ge=400)
+    sam_mask_encoding: Literal["lossless", "one_bit"] | None = None
+    sam_include_confidence: bool = False
