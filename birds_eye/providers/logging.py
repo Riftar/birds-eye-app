@@ -21,6 +21,7 @@ FIELDS = (
     "reasoning_effort",
     "usage",
     "cost_usd",
+    "ledger_total_usd",
     "finish_reason",
     "truncated",
 )

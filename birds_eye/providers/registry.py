@@ -27,7 +27,7 @@ def bindings(settings: Settings) -> list[ModelBinding]:
             ModelBinding(
                 logical_model="muse-spark",
                 provider=ProviderId.META,
-                concrete_model="muse-spark-1.3",
+                concrete_model=settings.meta_muse_model,
                 operation="text",
             ),
             ModelBinding(

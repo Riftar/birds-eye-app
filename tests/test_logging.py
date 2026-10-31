@@ -30,7 +30,7 @@ async def test_logs_match_returned_metadata_and_attribute_every_provider(
     assert [(r["provider"], r["concrete_model"]) for r in records] == [
         ("baseten", "meta-models/muse-spark-open-1026"),
         ("modal", "mock-modal-muse-deployment"),
-        ("meta_model_api", "muse-spark-1.3"),
+        ("meta_model_api", "muse-spark-1.3-contributor"),
     ]
     assert all(r["logical_model"] == "muse-spark" for r in records)
 

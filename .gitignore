@@ -22,3 +22,5 @@ demo-footage/
 *.egg-info/
 dist/
 build/
+
+var/
