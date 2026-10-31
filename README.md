@@ -93,7 +93,7 @@ Planner, Writer and Reviewer call Muse Spark live when live mode is enabled; SAM
 
 `birds_eye/core` holds shared inputs and lifecycle validation; `birds_eye/providers` holds routing contracts and transports; `birds_eye/meta` and `birds_eye/tencent` expose the two boundaries in one FastAPI app. `mock-data/default` contains a fake creator scenario. Inputs are read afresh for each run and retained as a snapshot. Git-backed artifacts, durable claims, authenticated decisions, scheduling and publishing are future work. Reviewer approval permits review passage, never human approval; revisions stay in review.
 
-Per-run call and token caps limit the live demo; provider cost caps are configuration placeholders. Paid transports require durable reservations, pricing or maximum-cost estimates, and reconciliation of uncertain charges. Durable accounting, the full gated workflow and SAM integration remain future work.
+Per-run call and token caps limit the live demo. Live calls also use a persistent per-provider USD ledger and caps; configure prices for Meta and Modal before using them. The full gated workflow and SAM integration remain future work.
 
 ## Setup and commands
 
@@ -133,4 +133,4 @@ To deploy, export both provider keys in the deployer's environment, then run:
 MODAL_PROFILE=riftar-dev uv run --extra deploy modal deploy modal_app.py
 ```
 
-The Modal app uses CPU only, 512 MB memory, zero minimum containers, a 60-second scale-down window, one maximum container, four concurrent inputs, and a 300-second timeout. The caps are per run, not a durable spending limit.
+The Modal app uses CPU only, 512 MB memory, zero minimum containers, a 60-second scale-down window, one maximum container, four concurrent inputs, and a 300-second timeout. The ledger persists settled costs at `LEDGER_PATH` (default `var/ledger.jsonl`); configure persistent storage when deploying.
