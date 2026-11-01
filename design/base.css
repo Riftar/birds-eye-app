@@ -1,0 +1,9 @@
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--color-paper); color: var(--color-ink); font-family: var(--font-body); line-height: 1.55; }
+h1, h2, p { margin: 0; }
+h1, h2 { font-weight: 500; letter-spacing: var(--tracking-display); line-height: 1.1; }
+h1 { font-size: var(--text-2xl); }
+button, textarea { font: inherit; }
+.container { width: min(100% - 2 * var(--space-lg), var(--container)); margin-inline: auto; }
+@media (max-width: 40rem) { .container { width: calc(100% - 2 * var(--space-md)); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }

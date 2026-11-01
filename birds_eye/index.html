@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Birds Eye: Meta demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500&family=Atkinson+Hyperlegible+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/design/tokens.css">
+  <link rel="stylesheet" href="/design/components.css">
+</head>
+<body>
+<header class="container topbar"><span class="wordmark">Birds Eye</span><span class="chip chip--mock">MOCK data</span></header>
+<main class="container sheet">
+  <section>
+    <h1>Meta single-brief demo</h1>
+    <p class="intro">Product sheet and rulebook: MOCK data. This demo does not publish content.</p>
+    <div class="run">
+      <form id="form" class="panel field">
+        <label for="brief">Creator brief</label>
+        <p class="help" id="brief-help">Say what the post is about, the platform, who it’s for, and anything off limits.</p>
+        <textarea id="brief" class="textarea" required maxlength="4000" rows="8" cols="70" aria-describedby="brief-help" placeholder="e.g. Instagram carousel for our iced palm-sugar latte, aimed at office workers"></textarea>
+        <div class="row"><button class="btn btn--primary">Run pipeline</button></div>
+        <p class="notice"><span class="chip chip--mock">MOCK data</span><span>The product sheet and rulebook are samples. Nothing gets published.</span></p>
+      </form>
+      <div id="result" class="field" aria-live="polite"><div class="empty"><span class="empty__title">No runs yet</span><p>Write a brief and run it. Each agent’s step shows up here.</p></div></div>
+    </div>
+  </section>
+</main>
+<script>
+const form = document.querySelector('#form'), result = document.querySelector('#result');
+const element = (tag, classes, text) => {
+  const node = document.createElement(tag);
+  node.className = classes;
+  if (text != null) node.textContent = text;
+  return node;
+};
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  result.replaceChildren(element('div', 'chip chip--running', 'Running'));
+  try {
+    const response = await fetch('/meta/runs', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({brief:document.querySelector('#brief').value})});
+    const data = await response.json();
+    result.replaceChildren();
+    if (!response.ok) {
+      const alert = element('div', 'alert');
+      alert.setAttribute('role', 'alert');
+      const heading = element('div', 'alert__title');
+      heading.append(element('span', '', 'Unable to complete the run'), element('code', 'measured alert__code', data.code || ''));
+      alert.append(heading, element('p', '', data.message || (data.detail ? JSON.stringify(data.detail) : response.statusText)));
+      result.append(alert);
+    }
+    const stages = [...(data.stages || [])];
+    if (!response.ok && data.failed_stage) stages.push({stage: data.failed_stage, attempts: data.attempts || [], output: '', failed: true});
+    for (const stage of stages) {
+      const section = element('section', 'step panel');
+      const head = element('div', 'step__head');
+      const status = stage.failed ? ['failed', 'Failed'] : stage.truncated ? ['cutoff', 'Cut off'] : (stage.attempts || []).length > 1 ? ['backup', 'On backup'] : ['done', 'Done'];
+      head.append(element('h2', 'step__name', stage.stage), element('span', 'chip chip--' + status[0], status[1]));
+      section.append(head);
+      const attempts = element('ol', 'attempts');
+      for (const a of stage.attempts || []) {
+        const failed = a.status !== 'success';
+        const row = element('li', 'attempt' + (failed ? ' is-failed' : ''));
+        const details = [a.error_code || (a.attempt != null ? 'attempt ' + a.attempt : '')];
+        if (a.cost_usd != null) details.push('$' + a.cost_usd);
+        if (a.latency_ms != null) details.push((a.latency_ms / 1000).toFixed(2) + 's');
+        row.append(element('span', 'measured provider', a.provider), element('span', 'measured model-name', a.concrete_model || ''), element('span', 'measured' + (a.error_code ? ' code' : ''), details.filter(Boolean).join(' · ')), element('span', 'chip chip--' + (failed ? 'failed' : 'done'), a.status));
+        attempts.append(row);
+      }
+      section.append(attempts);
+      if (!stage.failed && (stage.attempts || []).length > 1) section.append(element('p', 'fallback-note', 'That provider failed, so a backup provider took over.'));
+      if (stage.output) section.append(element('pre', 'output', stage.output + (stage.truncated ? '\n(output truncated at token limit)' : '')));
+      result.append(section);
+    }
+  } catch (_) { result.replaceChildren(element('div', 'alert', 'Unable to complete the run.')); }
+});
+</script>
+</body>
+</html>

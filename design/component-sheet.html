@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Birds Eye components</title>
+<meta name="description" content="Design system components for the Birds Eye demo: brief input, step badges, lifecycle, approval gates, errors, audit log and empty states.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500&family=Atkinson+Hyperlegible+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./components.css">
+</head>
+<body>
+<header class="container topbar">
+  <span class="wordmark">Birds Eye</span>
+  <span class="chip chip--mock">MOCK data</span>
+</header>
+
+<main class="container sheet">
+  <section aria-labelledby="s-intro">
+    <h1 id="s-intro">Birds Eye components</h1>
+    <p class="intro">The parts the demo screen is built from. Amber means a person decides. Blue means a model or provider ran. Names, models and times below are example values, not a real run.</p>
+  </section>
+
+  <section aria-labelledby="s-run">
+    <h2 id="s-run">The run, put together</h2>
+    <div class="run">
+      <form class="panel field" onsubmit="return false">
+        <label for="brief">Creator brief</label>
+        <p class="help" id="brief-help">Say what the post is about, the platform, who it’s for, and anything off limits.</p>
+        <textarea class="textarea" id="brief" aria-describedby="brief-help" placeholder="e.g. Instagram carousel for our iced palm-sugar latte, aimed at office workers"></textarea>
+        <div class="row"><button class="btn btn--primary" type="submit">Run pipeline</button></div>
+        <p class="notice"><span class="chip chip--mock">MOCK data</span><span>the product sheet and rulebook are samples. Nothing gets published.</span></p>
+      </form>
+
+      <div class="step panel" aria-label="Writer step">
+        <div class="step__head">
+          <span class="step__name">Writer</span>
+          <span class="chip chip--backup">On backup</span>
+        </div>
+        <ol class="attempts">
+          <li class="attempt is-failed"><span class="measured provider">baseten</span><span class="measured model-name">meta-models/muse-spark-open-1026</span><code class="measured code">TIMEOUT</code><span class="chip chip--failed">Failed</span></li>
+          <li class="attempt"><span class="measured provider">meta_model_api</span><span class="measured model-name">muse-spark-1.3</span><span class="measured">attempt 2</span><span class="chip chip--done">Done</span></li>
+        </ol>
+        <p class="fallback-note">That provider failed, so a backup provider took over.</p>
+        <pre class="output">Slide 1: Es kopi gula aren, dingin, buat jam 3 sore.
+Slide 2: Gula aren asli, bukan sirup.
+Slide 3: Pesan lewat aplikasi, ambil di lobi.</pre>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-steps">
+    <h2 id="s-steps">Step badges</h2>
+    <p class="intro">One badge per step, always next to the step name. Running and On backup are blue because a model is working. Cut off is amber because a person has to act.</p>
+    <div class="row">
+      <span class="chip chip--waiting">Waiting</span>
+      <span class="chip chip--running">Running</span>
+      <span class="chip chip--backup">On backup</span>
+      <span class="chip chip--done">Done</span>
+      <span class="chip chip--failed">Failed</span>
+      <span class="chip chip--cutoff">Cut off</span>
+    </div>
+    <div class="grid-3">
+      <div class="step panel" aria-label="Planner step, loading">
+        <div class="step__head"><span class="step__name">Planner</span><span class="chip chip--running">Running</span></div>
+        <div class="skeleton" aria-hidden="true"><span></span><span></span><span></span></div>
+        <p class="measured"><span class="provider" style="color: var(--be-model)">baseten</span> meta-models/muse-spark-open-1026</p>
+      </div>
+      <div class="step panel" aria-label="Reviewer step, waiting">
+        <div class="step__head"><span class="step__name">Reviewer</span><span class="chip chip--waiting">Waiting</span></div>
+        <p class="muted small">Starts when the Writer step is done.</p>
+      </div>
+      <div class="step panel" aria-label="Writer step, cut off">
+        <div class="step__head"><span class="step__name">Writer</span><span class="chip chip--cutoff">Cut off</span></div>
+        <div class="alert" role="alert">
+          <div class="alert__title"><span>Output cut off</span></div>
+          <p>The model hit its length limit before finishing, so this output is incomplete. Run the step again or shorten the brief.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-life">
+    <h2 id="s-life">Lifecycle</h2>
+    <p class="intro">Seven stages in order. The amber edge marks the two stages only a person can move a post into.</p>
+    <ol class="lifecycle" aria-label="Post lifecycle">
+      <li><span class="chip chip--stage">Idea</span></li>
+      <li><span class="chip chip--stage is-current" aria-current="step">Draft</span></li>
+      <li><span class="chip chip--stage is-gate">Approved</span></li>
+      <li><span class="chip chip--stage">In review</span></li>
+      <li><span class="chip chip--stage">Review passed</span></li>
+      <li><span class="chip chip--stage is-gate">Scheduled</span></li>
+      <li><span class="chip chip--stage">Published</span></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="s-post">
+    <h2 id="s-post">Post card</h2>
+    <div class="grid-2">
+      <article class="post panel">
+        <span class="post__title">Iced palm-sugar latte carousel</span>
+        <div class="post__meta"><span class="chip chip--stage is-current">Draft</span><span class="chip">Instagram</span><span class="measured">post-0007</span></div>
+        <p class="muted small">Three slides for office workers, written by the Writer agent and passed by the Reviewer.</p>
+      </article>
+      <article class="post panel">
+        <span class="post__title">Weekend bundle reel</span>
+        <div class="post__meta"><span class="chip chip--stage">Review passed</span><span class="chip">TikTok</span><span class="measured">post-0008</span></div>
+        <p class="muted small">Waiting for a person to schedule it.</p>
+      </article>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-gates">
+    <h2 id="s-gates">Approval gates</h2>
+    <p class="intro">The only amber buttons on the screen. Agents never see them.</p>
+    <div class="grid-2">
+      <div class="gate panel" aria-label="Gate 1">
+        <div class="row"><span class="chip chip--gate">Gate 1</span><span class="chip chip--stage is-current">Draft</span></div>
+        <div class="gate__actions">
+          <button class="btn btn--primary" type="button">Approve draft</button>
+          <button class="btn" type="button">Reject draft</button>
+        </div>
+        <div class="well gate__confirm">
+          <p>Approve this draft? It moves to Approved.</p>
+          <div class="gate__actions" style="margin-top: var(--space-sm)">
+            <button class="btn btn--primary" type="button">Approve draft</button>
+            <button class="btn" type="button">Cancel</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="reject1">Why are you rejecting this draft?</label>
+          <textarea class="textarea" id="reject1" style="min-height: 80px"></textarea>
+          <div class="row"><button class="btn" type="button">Reject draft</button></div>
+        </div>
+      </div>
+      <div class="gate panel" aria-label="Gate 2">
+        <div class="row"><span class="chip chip--gate">Gate 2</span><span class="chip chip--stage is-current">Review passed</span></div>
+        <div class="gate__actions">
+          <button class="btn btn--primary" type="button">Schedule post</button>
+          <button class="btn" type="button">Reject post</button>
+        </div>
+        <div class="well gate__confirm">
+          <p>Schedule this post? It moves to Scheduled. Nothing is published in this demo.</p>
+          <div class="gate__actions" style="margin-top: var(--space-sm)">
+            <button class="btn btn--primary" type="button">Schedule post</button>
+            <button class="btn" type="button">Cancel</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="reject2">Why are you rejecting this post?</label>
+          <textarea class="textarea" id="reject2" style="min-height: 80px"></textarea>
+          <div class="row"><button class="btn" type="button">Reject post</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-states">
+    <h2 id="s-states">Button states</h2>
+    <p class="intro">Every control ships all eight. Loading keeps the label so the button never changes width.</p>
+    <div class="state-grid">
+      <figure><button class="btn btn--primary" type="button">Approve draft</button><figcaption>Default</figcaption></figure>
+      <figure><button class="btn btn--primary is-hover" type="button">Approve draft</button><figcaption>Hover</figcaption></figure>
+      <figure><button class="btn btn--primary is-focus" type="button">Approve draft</button><figcaption>Focus</figcaption></figure>
+      <figure><button class="btn btn--primary is-active" type="button">Approve draft</button><figcaption>Pressed</figcaption></figure>
+      <figure><button class="btn btn--primary is-disabled" type="button" disabled>Approve draft</button><figcaption>Disabled</figcaption></figure>
+      <figure><button class="btn btn--primary is-loading" type="button" aria-busy="true"><span class="spinner" aria-hidden="true"></span>Approve draft</button><figcaption>Loading</figcaption></figure>
+      <figure><button class="btn btn--primary is-error" type="button">Approve draft</button><figcaption>Error</figcaption></figure>
+      <figure><button class="btn btn--primary is-success" type="button">Approve draft</button><figcaption>Success</figcaption></figure>
+      <figure><button class="btn" type="button">Reject draft</button><figcaption>Default</figcaption></figure>
+      <figure><button class="btn is-hover" type="button">Reject draft</button><figcaption>Hover</figcaption></figure>
+      <figure><button class="btn is-focus" type="button">Reject draft</button><figcaption>Focus</figcaption></figure>
+      <figure><button class="btn is-active" type="button">Reject draft</button><figcaption>Pressed</figcaption></figure>
+      <figure><button class="btn is-disabled" type="button" disabled>Reject draft</button><figcaption>Disabled</figcaption></figure>
+      <figure><button class="btn is-loading" type="button" aria-busy="true"><span class="spinner" aria-hidden="true"></span>Reject draft</button><figcaption>Loading</figcaption></figure>
+      <figure><button class="btn is-error" type="button">Reject draft</button><figcaption>Error</figcaption></figure>
+      <figure><button class="btn is-success" type="button">Reject draft</button><figcaption>Success</figcaption></figure>
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label for="brief-focus">Creator brief, focused</label>
+        <textarea class="textarea is-focus" id="brief-focus" style="min-height: 80px" placeholder="e.g. Instagram carousel for our iced palm-sugar latte, aimed at office workers"></textarea>
+      </div>
+      <div class="field">
+        <label for="brief-err">Creator brief, empty on submit</label>
+        <textarea class="textarea" id="brief-err" style="min-height: 80px" aria-invalid="true" aria-describedby="brief-err-msg"></textarea>
+        <p class="error-text" id="brief-err-msg">Write a brief first.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-errors">
+    <h2 id="s-errors">Errors</h2>
+    <p class="intro">Plain title, plain reason, and the code on the right so QA can match it to the log.</p>
+    <div class="grid-2">
+      <div class="alert" role="alert"><div class="alert__title"><span>Only a person can decide this</span><code class="measured alert__code">HUMAN_ONLY</code></div><p>Agents can’t approve or reject at this gate. Use the buttons to decide it yourself.</p></div>
+      <div class="alert" role="alert"><div class="alert__title"><span>This agent’s claim ended</span><code class="measured alert__code">CLAIM_LOST</code></div><p>This agent’s claim is no longer active, so it stopped. The audit log shows what happened.</p></div>
+      <div class="alert" role="alert"><div class="alert__title"><span>This post can’t move there</span><code class="measured alert__code">INVALID_TRANSITION</code></div><p>Posts move one stage at a time, in order. This change skips a stage or goes backward, so it was blocked.</p></div>
+      <div class="alert" role="alert"><div class="alert__title"><span>Every provider failed</span><code class="measured alert__code">PROVIDERS_EXHAUSTED</code></div><p>Every provider in the chain failed on this step, so the run stopped here. Try again in a few minutes.</p></div>
+      <div class="alert" role="alert"><div class="alert__title"><span>Output cut off</span><span class="measured alert__code">truncated</span></div><p>The model hit its length limit before finishing, so this output is incomplete. Run the step again or shorten the brief.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-trail">
+    <h2 id="s-trail">Audit log</h2>
+    <p class="intro">Newest at the bottom. A person’s actions are amber, the model name is blue.</p>
+    <div class="panel">
+      <ol class="trail">
+        <li><time class="measured">10:02:14</time><span><span class="who-agent">Planner</span> claimed this step</span></li>
+        <li><time class="measured">10:02:31</time><span><span class="who-agent">Planner</span> finished this step (<span class="measured model">muse-spark</span>)</span></li>
+        <li><time class="measured">10:02:33</time><span><span class="who-agent">Writer</span> claimed this step</span></li>
+        <li><time class="measured">10:03:05</time><span><span class="who-agent">Writer</span> finished this step (<span class="measured model">muse-spark</span>)</span></li>
+        <li><time class="measured">10:03:20</time><span><span class="who-agent">Reviewer</span> sent the draft back for changes (<span class="measured model">muse-spark</span>)</span></li>
+        <li><time class="measured">10:04:02</time><span><span class="who-agent">Reviewer</span> passed the draft (<span class="measured model">muse-spark</span>)</span></li>
+        <li><time class="measured">10:05:40</time><span class="who-person">A person approved this</span></li>
+        <li><time class="measured">10:06:12</time><span><span class="who-agent">Writer</span> released this step</span></li>
+        <li><time class="measured">10:06:30</time><span><span class="who-agent">Writer</span> lost its claim on this step</span></li>
+        <li><time class="measured">10:07:51</time><span class="who-person">A person rejected this</span></li>
+        <li><time class="measured">10:09:03</time><span class="who-person">Post scheduled</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-empty">
+    <h2 id="s-empty">Empty states</h2>
+    <div class="grid-2">
+      <div class="empty"><span class="empty__title">No runs yet</span><p>Write a brief and run it. Each agent’s step shows up here as it happens.</p></div>
+      <div class="empty"><span class="empty__title">Nothing here yet</span><p>Posts land in this column when they reach this stage.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-tokens">
+    <h2 id="s-tokens">Colour</h2>
+    <div class="swatches">
+      <div class="swatch"><i style="background: var(--color-paper)"></i><span class="small">Ground</span></div>
+      <div class="swatch"><i style="background: var(--color-paper-2)"></i><span class="small">Panel</span></div>
+      <div class="swatch"><i style="background: var(--color-paper-3)"></i><span class="small">Well</span></div>
+      <div class="swatch"><i style="background: var(--color-ink)"></i><span class="small">Ink</span></div>
+      <div class="swatch"><i style="background: var(--be-gate)"></i><span class="small">Person, amber</span></div>
+      <div class="swatch"><i style="background: var(--be-model)"></i><span class="small">Model, blue</span></div>
+      <div class="swatch"><i style="background: var(--be-ok)"></i><span class="small">Done</span></div>
+      <div class="swatch"><i style="background: var(--be-bad)"></i><span class="small">Failed</span></div>
+    </div>
+  </section>
+</main>
+</body>
+</html>
