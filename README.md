@@ -87,13 +87,13 @@ The Meta AI Hackathon kicked off Monday 26 Oct 2026, 12:00 PM ET (23:00 WIB). Th
 
 ## Model usage
 
-Planner, Writer and Reviewer call Muse Spark live when live mode is enabled; SAM 3.1 segments creator images and video frames. Logical IDs remain stable as routing selects Baseten, Modal, then Meta Model API, filtered by capabilities and credentials. SAM is configured only for Meta Model API. Muse text calls have a 400-token minimum. Attempt metadata is returned and logged with model and provider attribution; credentials and inputs are excluded. Muse Voice Transcribe and Muse Image are future scope. Live provider calls are opt-in.
+Planner, Writer and Reviewer call Muse Spark live when live mode is enabled; SAM 3.1 segments creator images and video frames. The Muse chain is **Baseten → Meta Model API**; fallback switches the provider, never the model. SAM is configured only for Meta Model API. Muse text calls have a 400-token minimum. Attempt metadata is returned and logged with model and provider attribution; credentials and inputs are excluded. Muse Voice Transcribe and Muse Image are future scope. Live provider calls are opt-in.
 
 ## Architecture/layout
 
 `birds_eye/core` holds shared inputs and lifecycle validation; `birds_eye/providers` holds routing contracts and transports; `birds_eye/meta` and `birds_eye/tencent` expose the two boundaries in one FastAPI app. `mock-data/default` contains a fake creator scenario. Inputs are read afresh for each run and retained as a snapshot. Git-backed artifacts, durable claims, authenticated decisions, scheduling and publishing are future work. Reviewer approval permits review passage, never human approval; revisions stay in review.
 
-Per-run call and token caps limit the live demo. Live calls also use a persistent per-provider USD ledger and caps. The Meta contributor and standard models and the Baseten model have default prices; configure prices for Modal before using it. The full gated workflow and SAM integration remain future work.
+Per-run call and token caps limit the live demo. Live calls also use a persistent per-provider USD ledger and caps. The Meta contributor and standard models and the Baseten model have default prices. The full gated workflow and SAM integration remain future work.
 
 ## Setup and commands
 
@@ -127,10 +127,4 @@ PROVIDER_MODE=live uv run uvicorn birds_eye.app:create_app --factory --port 8000
 
 Open `/` and submit a brief. The product sheet and rulebook are MOCK data. To exercise fallback, set `FORCE_FAIL_PROVIDERS=baseten`; the forced attempt is recorded without making a provider request. The creator brief is the primary input for every stage; the mock product sheet and rulebook provide secondary constraints. `PLANNER_MAX_TOKENS=4000`, `WRITER_MAX_TOKENS=4000`, and `REVIEWER_MAX_TOKENS=3000` set completion budgets (minimum 400). `MAX_CALLS_PER_RUN=12` and `MAX_TOKENS_PER_RUN=24000` limit the run, including retries and prompt usage. Timeouts retain their full reservation. `META_MUSE_MODEL` defaults to `muse-spark-1.3-contributor`; `META_CONTRIBUTOR_RPM` defaults to 150, with calls limited to at most 140 RPM for headroom. Provider price overrides remain available; unknown Meta models need explicit input and output prices. `PROVIDER_MAX_RETRIES=2` and `PROVIDER_RETRY_BASE_SECONDS=1` control exponential backoff with jitter; `PROVIDER_TIMEOUT_SECONDS=120` controls the timeout. `REASONING_EFFORT=low` applies to both providers, with optional `META_REASONING_EFFORT` override. Truncated outputs and failed attempts are shown in the results.
 
-To deploy, export both provider keys in the deployer's environment, then run:
-
-```bash
-MODAL_PROFILE=riftar-dev uv run --extra deploy modal deploy modal_app.py
-```
-
-The Modal app uses CPU only, 512 MB memory, zero minimum containers, a 60-second scale-down window, one maximum container, four concurrent inputs, and a 300-second timeout. The ledger persists settled costs at `LEDGER_PATH` (default `var/ledger.jsonl`); configure persistent storage when deploying.
+`modal_app.py` remains an optional hosting entry point. It is unused and not deployed; Modal is not part of the Muse routing chain. The ledger persists settled costs at `LEDGER_PATH` (default `var/ledger.jsonl`).

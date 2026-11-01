@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=None, extra="ignore")
 
     baseten_api_key: SecretStr | None = None
+    # Reserved for the optional Modal hosting entry point; unused for routing.
     modal_token_id: SecretStr | None = None
     modal_token_secret: SecretStr | None = None
     model_api_key: SecretStr | None = None
@@ -19,7 +20,6 @@ class Settings(BaseSettings):
     meta_structured_strict: bool = True
     meta_muse_model: str = "muse-spark-1.3-contributor"
     meta_contributor_rpm: int = Field(default=150, ge=1)
-    modal_muse_endpoint: str | None = None
     force_fail_providers: str = ""
     reasoning_effort: Literal["minimal", "low", "medium", "high", "xhigh"] = "low"
     meta_reasoning_effort: (
@@ -33,16 +33,13 @@ class Settings(BaseSettings):
     max_calls_per_run: int = Field(default=12, ge=1)
     max_tokens_per_run: int = Field(default=24000, ge=1)
     default_scenario_dir: Path = Path("mock-data/default")
+    # Reserved for the optional Modal hosting entry point; unused for routing.
     modal_profile: str = "riftar-dev"
-    modal_muse_model_id: str | None = None
-    modal_budget_cap_usd: Decimal = Field(default=Decimal(50), ge=0)
     meta_model_api_budget_cap_usd: Decimal = Field(default=Decimal(100), ge=0)
     baseten_budget_cap_usd: Decimal | None = Field(default=None, ge=0)
     ledger_path: Path = Path("var/ledger.jsonl")
     price_baseten_input_per_mtok_usd: Decimal = Field(default=Decimal("1.25"), ge=0)
     price_baseten_output_per_mtok_usd: Decimal = Field(default=Decimal("4.25"), ge=0)
-    price_modal_input_per_mtok_usd: Decimal | None = Field(default=None, ge=0)
-    price_modal_output_per_mtok_usd: Decimal | None = Field(default=None, ge=0)
     price_meta_model_api_input_per_mtok_usd: Decimal | None = Field(default=None, ge=0)
     price_meta_model_api_output_per_mtok_usd: Decimal | None = Field(default=None, ge=0)
     price_meta_model_api_cached_input_per_mtok_usd: Decimal | None = Field(

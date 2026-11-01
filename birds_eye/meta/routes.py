@@ -25,7 +25,7 @@ def resolve(request: Request, inputs: RunInputs | None) -> RunInputs:
 
 
 @router.get("")
-def entry(request: Request):
+async def entry(request: Request):
     inputs = resolve(request, None)
     return {
         "status": "PLACEHOLDER",
