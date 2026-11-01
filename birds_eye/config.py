@@ -53,3 +53,5 @@ class Settings(BaseSettings):
     muse_max_tokens_default: int = Field(default=2000, ge=400)
     sam_mask_encoding: Literal["lossless", "one_bit"] | None = None
     sam_include_confidence: bool = False
+    meta_file_ttl_seconds: int = Field(default=3600, gt=0)
+    inline_media_max_bytes: int = Field(default=8 * 1024 * 1024, gt=0)

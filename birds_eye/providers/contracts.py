@@ -25,6 +25,7 @@ class MediaInput(BaseModel):
     mime: str
     data_url: str
     bytes_len: int = Field(ge=0)
+    file_id: str | None = None
 
     @property
     def image_url(self) -> str:
