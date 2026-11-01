@@ -1,5 +1,4 @@
 import json
-import logging
 from pathlib import Path
 
 import httpx
@@ -172,32 +171,6 @@ async def test_http_error_mapping(status, code):
 
 
 @pytest.mark.asyncio
-async def test_key_value_never_logged(caplog):
-    async with sse_client(read_fixture("lossless.sse")) as client:
-        with caplog.at_level(logging.INFO, logger="birds_eye.model_calls"):
-            await segment(client, BASE_URL, KEY, IMAGE, PROMPT, 30.0)
-    assert caplog.records, "SAM segment must log one JSON line per attempt"
-    assert KEY.get_secret_value() not in caplog.text
-    record = json.loads(caplog.records[-1].message)
-    assert (record["provider"], record["model"], record["status"]) == (
-        "meta_model_api",
-        "sam-3.1",
-        "success",
-    )
-    assert KEY.get_secret_value() not in json.dumps(record)
-    caplog.clear()
-    async with sse_client("", status=429) as client:
-        with (
-            caplog.at_level(logging.INFO, logger="birds_eye.model_calls"),
-            pytest.raises(ProviderError),
-        ):
-            await segment(client, BASE_URL, KEY, IMAGE, PROMPT, 30.0)
-    assert KEY.get_secret_value() not in caplog.text
-    failed = json.loads(caplog.records[-1].message)
-    assert (failed["status"], failed["error_code"]) == ("failed", "RATE_LIMITED")
-
-
-@pytest.mark.asyncio
 async def test_decode_one_bit_raster_when_parser_available():
     pytest.importorskip("meta_sam_parser")
     async with sse_client(read_fixture("one_bit.sse")) as client:
@@ -245,17 +218,24 @@ async def test_missing_image_url_is_invalid_request():
 
 
 @pytest.mark.asyncio
-async def test_file_id_only_media_is_invalid_request_until_files_api():
+async def test_file_id_image_media_sends_file_id_not_url():
     captured = []
     async with sse_client(read_fixture("lossless.sse"), captured=captured) as client:
-        with pytest.raises(ProviderError) as error:
-            await segment(
-                client,
-                BASE_URL,
-                KEY,
-                MediaInput(file_id="file_mock_123"),
-                PROMPT,
-                30.0,
-            )
-    assert error.value.code == "INVALID_REQUEST"
-    assert captured == []
+        result = await segment(
+            client,
+            BASE_URL,
+            KEY,
+            MediaInput(file_id="file_mock_123"),
+            PROMPT,
+            30.0,
+        )
+    assert len(result.objects) == 1
+    body = json.loads(captured[0].content.decode())
+    _, image_part = body["input"][0]["content"]
+    assert image_part == {"type": "input_image", "file_id": "file_mock_123"}
+    assert "image_url" not in image_part
+
+
+def test_image_url_never_returns_file_id_as_url():
+    with pytest.raises(ValueError, match="data_url"):
+        _ = MediaInput(file_id="file_mock_123").image_url

@@ -6,6 +6,8 @@ FIELDS = (
     "event",
     "run_id",
     "stage",
+    "operation",
+    "objects",
     "call_id",
     "attempt",
     "logical_model",

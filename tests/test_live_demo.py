@@ -134,9 +134,9 @@ async def test_forced_fallback_and_caps(settings, muse_request):
     result = await router.call(muse_request)
     assert [a["error_code"] for a in result.metadata] == [
         "FORCED_FAILURE",
-        "NOT_CONFIGURED",
         None,
     ]
+    assert [a["provider"] for a in result.metadata] == ["baseten", "meta_model_api"]
     assert transport.calls[0][0].provider == ProviderId.META
     with pytest.raises(RoutingError) as exc:
         await router.call(muse_request)

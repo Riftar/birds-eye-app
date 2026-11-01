@@ -14,7 +14,7 @@
 <header class="container topbar"><span class="wordmark">Birds Eye</span><span class="chip chip--mock">MOCK data</span></header>
 <main class="container sheet">
   <section>
-    <h1>Meta single-brief demo</h1>
+    <h1>Birds Eye: Meta single-brief demo</h1>
     <p class="intro">Product sheet and rulebook: MOCK data. This demo does not publish content.</p>
     <div class="run">
       <form id="form" class="panel field">
@@ -35,6 +35,35 @@ const element = (tag, classes, text) => {
   node.className = classes;
   if (text != null) node.textContent = text;
   return node;
+};
+const renderOutput = stage => {
+  let value;
+  try { value = JSON.parse(stage.output); }
+  catch (_) { return element('pre', 'output', stage.output + (stage.truncated ? '\n(output truncated at token limit)' : '')); }
+  const output = element('div', 'output');
+  const render = (parent, item) => {
+    if (item !== null && typeof item === 'object') {
+      const list = element(Array.isArray(item) ? 'ul' : 'dl', '');
+      for (const [key, child] of Object.entries(item)) {
+        if (Array.isArray(item)) {
+          const entry = element('li', '');
+          render(entry, child);
+          list.append(entry);
+        } else {
+          list.append(element('dt', '', key.replace(/_/g, ' ')));
+          const entry = element('dd', '');
+          render(entry, child);
+          list.append(entry);
+        }
+      }
+      parent.append(list);
+    } else {
+      parent.append(document.createTextNode(item == null ? '—' : String(item)));
+    }
+  };
+  render(output, value);
+  if (stage.truncated) output.append(element('p', '', 'Output truncated at token limit'));
+  return output;
 };
 form.addEventListener('submit', async e => {
   e.preventDefault();
@@ -71,7 +100,7 @@ form.addEventListener('submit', async e => {
       }
       section.append(attempts);
       if (!stage.failed && (stage.attempts || []).length > 1) section.append(element('p', 'fallback-note', 'That provider failed, so a backup provider took over.'));
-      if (stage.output) section.append(element('pre', 'output', stage.output + (stage.truncated ? '\n(output truncated at token limit)' : '')));
+      if (stage.output) section.append(renderOutput(stage));
       result.append(section);
     }
   } catch (_) { result.replaceChildren(element('div', 'alert', 'Unable to complete the run.')); }

@@ -49,11 +49,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     @app.get("/", response_class=HTMLResponse)
-    def home():
+    async def home():
         return (Path(__file__).parent / "index.html").read_text(encoding="utf-8")
 
     @app.get("/healthz")
-    def health():
+    async def health():
         return {"status": "ok"}
 
     return app

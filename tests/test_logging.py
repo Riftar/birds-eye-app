@@ -16,7 +16,6 @@ async def test_logs_match_returned_metadata_and_attribute_every_provider(
     transport = FakeTransport(
         [
             ProviderError("TIMEOUT"),
-            ProviderError("PROVIDER_5XX"),
             ProviderReply(output="ok", usage={"input_tokens": 3, "output_tokens": 4}),
         ]
     )
@@ -29,7 +28,6 @@ async def test_logs_match_returned_metadata_and_attribute_every_provider(
     assert all(set(record) == set(FIELDS) for record in records)
     assert [(r["provider"], r["concrete_model"]) for r in records] == [
         ("baseten", "meta-models/muse-spark-open-1026"),
-        ("modal", "mock-modal-muse-deployment"),
         ("meta_model_api", "muse-spark-1.3-contributor"),
     ]
     assert all(r["logical_model"] == "muse-spark" for r in records)
@@ -41,8 +39,6 @@ async def test_fake_secrets_and_raw_errors_never_appear(
 ):
     secrets = [
         "FAKE_BASETEN_SECRET",
-        "FAKE_MODAL_ID",
-        "FAKE_MODAL_SECRET",
         "FAKE_META_SECRET",
     ]
     transport = FakeTransport(

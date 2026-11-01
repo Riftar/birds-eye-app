@@ -1,15 +1,20 @@
 import asyncio
+import base64
+import binascii
+import io
 import random
 import time
 import weakref
 from decimal import Decimal
 
 import httpx
+from PIL import Image, UnidentifiedImageError
 
 from birds_eye.config import Settings
 from birds_eye.providers.budget import LedgerBudgetGuard
 from birds_eye.providers.contracts import (
     BudgetGuard,
+    MediaInput,
     ModelRequest,
     ModelResponse,
     ProviderError,
@@ -20,6 +25,50 @@ from birds_eye.providers.contracts import (
 )
 from birds_eye.providers.logging import log_attempt
 from birds_eye.providers.registry import bindings
+
+
+def prepare_image(media: MediaInput | None, settings: Settings) -> MediaInput:
+    if media is None or media.mime not in {"image/png", "image/jpeg"}:
+        raise ProviderError("INVALID_IMAGE")
+    prefix = f"data:{media.mime};base64,"
+    if (
+        not media.data_url.startswith(prefix)
+        or media.bytes_len > settings.max_image_bytes
+    ):
+        raise ProviderError("INVALID_IMAGE")
+    encoded = media.data_url[len(prefix) :]
+    if len(encoded) > 4 * ((settings.max_image_bytes + 2) // 3):
+        raise ProviderError("INVALID_IMAGE")
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+        if len(raw) != media.bytes_len or len(raw) > settings.max_image_bytes:
+            raise ValueError
+        with Image.open(io.BytesIO(raw)) as image:
+            if image.format != {"image/png": "PNG", "image/jpeg": "JPEG"}[media.mime]:
+                raise ValueError
+            image.load()
+            if max(image.size) <= settings.sam_max_side_px:
+                return media
+            image.thumbnail((settings.sam_max_side_px, settings.sam_max_side_px))
+            buffer = io.BytesIO()
+            image.save(buffer, format=image.format)
+            raw = buffer.getvalue()
+    except (
+        ValueError,
+        OSError,
+        binascii.Error,
+        UnidentifiedImageError,
+        Image.DecompressionBombError,
+    ):
+        raise ProviderError("INVALID_IMAGE") from None
+    if len(raw) > settings.max_image_bytes:
+        raise ProviderError("INVALID_IMAGE")
+    return media.model_copy(
+        update={
+            "data_url": prefix + base64.b64encode(raw).decode("ascii"),
+            "bytes_len": len(raw),
+        }
+    )
 
 
 class AsyncRateLimiter:
@@ -51,15 +100,21 @@ class RunBudget:
     def __init__(self, settings: Settings):
         self.max_calls = settings.max_calls_per_run
         self.max_tokens = settings.max_tokens_per_run
+        self.max_sam_calls = settings.max_sam_calls_per_run
+        self.sam_calls = 0
         self.calls = 0
         self.tokens = 0
 
-    def reserve(self, tokens: int) -> int:
+    def reserve(self, tokens: int, operation: str = "text") -> int:
+        if operation == "segmentation" and self.sam_calls >= self.max_sam_calls:
+            raise ProviderError("RUN_BUDGET_EXCEEDED")
         available = self.max_tokens - self.tokens
         if self.calls >= self.max_calls or (tokens and available < 400):
             raise ProviderError("RUN_BUDGET_EXCEEDED")
         amount = min(tokens, available)
         self.calls += 1
+        if operation == "segmentation":
+            self.sam_calls += 1
         self.tokens += amount
         return amount
 
@@ -102,6 +157,7 @@ def safe_usage(usage):
             "prompt_tokens",
             "completion_tokens",
             "total_tokens",
+            "images",
         }
         and isinstance(v, int)
         and not isinstance(v, bool)
@@ -139,6 +195,13 @@ class ModelRouter:
             request.logical_model
         ) != request.operation:
             raise RoutingError("INVALID_REQUEST", "Unsupported model or operation.", [])
+        if request.operation == "segmentation":
+            try:
+                request = request.model_copy(
+                    update={"media": prepare_image(request.media, self.settings)}
+                )
+            except ProviderError as exc:
+                raise RoutingError(exc.code, "Invalid image.", []) from None
         effective = (
             max(request.max_tokens or self.settings.muse_max_tokens_default, 400)
             if request.logical_model == "muse-spark"
@@ -152,8 +215,6 @@ class ModelRouter:
         }
         credentials = {
             ProviderId.BASETEN: self.settings.baseten_api_key,
-            ProviderId.MODAL: self.settings.modal_token_id
-            and self.settings.modal_token_secret,
             ProviderId.META: self.settings.model_api_key,
         }
         records = []
@@ -171,7 +232,7 @@ class ModelRouter:
             "SAFETY_REFUSAL",
             "MALFORMED_RESPONSE",
         }
-        for provider in ProviderId:
+        for provider in (ProviderId.BASETEN, ProviderId.META):
             binding = available.get(provider)
             for retry in range(self.settings.provider_max_retries + 1):
                 effort = (
@@ -186,6 +247,8 @@ class ModelRouter:
                     "event": "provider_attempt",
                     "run_id": request.run_id,
                     "stage": request.stage,
+                    "operation": request.operation,
+                    "objects": None,
                     "call_id": request.call_id,
                     "attempt": retry + 1,
                     "logical_model": request.logical_model,
@@ -212,12 +275,7 @@ class ModelRouter:
                 usage = None
                 try:
                     if not binding:
-                        record["error_code"] = (
-                            "NOT_CONFIGURED"
-                            if provider == ProviderId.MODAL
-                            and request.logical_model == "muse-spark"
-                            else "UNSUPPORTED_CAPABILITY"
-                        )
+                        record["error_code"] = "UNSUPPORTED_CAPABILITY"
                     elif not credentials[provider]:
                         record["error_code"] = "MISSING_CREDENTIALS"
                     else:
@@ -225,9 +283,7 @@ class ModelRouter:
                             max_cost = request.max_cost_usd
                             if isinstance(self.budget, LedgerBudgetGuard):
                                 if request.operation == "segmentation":
-                                    max_cost = max(
-                                        max_cost, self.settings.sam_price_per_image_usd
-                                    )
+                                    max_cost = self.settings.sam_price_per_image_usd
                                 else:
                                     input_price, _, output_price = self.budget.prices(
                                         provider, binding.concrete_model
@@ -243,7 +299,9 @@ class ModelRouter:
                         except ProviderError as exc:
                             record["error_code"] = exc.code
                         else:
-                            reserved = self.run_budget.reserve(effective)
+                            reserved = self.run_budget.reserve(
+                                effective, request.operation
+                            )
                             record["effective_max_tokens"] = record[
                                 "max_completion_tokens"
                             ] = reserved
@@ -270,6 +328,17 @@ class ModelRouter:
                                 or reply.output is None
                             ):
                                 raise ProviderError("MALFORMED_RESPONSE")
+                            if request.operation == "segmentation" and isinstance(
+                                reply.output, dict
+                            ):
+                                objects = reply.output.get("objects")
+                                if isinstance(objects, list):
+                                    record["objects"] = len(objects)
+                            if (
+                                request.operation == "segmentation"
+                                and reply.cost_usd is None
+                            ):
+                                reply.cost_usd = self.settings.sam_price_per_image_usd
                             usage = reply.usage
                             record.update(
                                 status="success",
@@ -344,8 +413,7 @@ class ModelRouter:
         eligible = [
             r
             for r in records
-            if r["error_code"]
-            not in {"MISSING_CREDENTIALS", "NOT_CONFIGURED", "UNSUPPORTED_CAPABILITY"}
+            if r["error_code"] not in {"MISSING_CREDENTIALS", "UNSUPPORTED_CAPABILITY"}
         ]
         if eligible and all(r["error_code"] == "BUDGET_EXHAUSTED" for r in eligible):
             raise RoutingError(

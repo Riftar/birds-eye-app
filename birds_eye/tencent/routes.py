@@ -9,7 +9,7 @@ router = APIRouter(prefix="/tencent")
 
 
 @router.get("")
-def entry():
+async def entry():
     return {
         "status": "PLACEHOLDER",
         "owner": "WorkBuddy",
@@ -18,7 +18,7 @@ def entry():
 
 
 @router.post("/runs")
-def run(request: Request, inputs: RunInputs | None = None):
+async def run(request: Request, inputs: RunInputs | None = None):
     make_context(resolve(request, inputs))
     return JSONResponse(
         status_code=501,
