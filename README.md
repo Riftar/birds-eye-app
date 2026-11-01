@@ -93,7 +93,7 @@ Planner, Writer and Reviewer call Muse Spark live when live mode is enabled; SAM
 
 `birds_eye/core` holds shared inputs and lifecycle validation; `birds_eye/providers` holds routing contracts and transports; `birds_eye/meta` and `birds_eye/tencent` expose the two boundaries in one FastAPI app. `mock-data/default` contains a fake creator scenario. Inputs are read afresh for each run and retained as a snapshot. Git-backed artifacts, durable claims, authenticated decisions, scheduling and publishing are future work. Reviewer approval permits review passage, never human approval; revisions stay in review.
 
-Per-run call and token caps limit the live demo. Live calls also use a persistent per-provider USD ledger and caps. The Meta contributor and standard models and the Baseten model have default prices; configure prices for Modal before using it. The full gated workflow and SAM integration remain future work.
+Per-run call and token caps limit the live demo. Live calls also use a persistent per-provider USD ledger and caps. The Meta contributor and standard models and the Baseten model have default prices; configure prices for Modal before using it. The full gated workflow remains future work. SAM segmentation is available through the model router with image size and per-run call limits.
 
 ## Setup and commands
 

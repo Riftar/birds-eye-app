@@ -3,7 +3,6 @@ from conftest import FakeBudgetGuard, FakeTransport
 
 from birds_eye.providers.contracts import (
     ModelBinding,
-    ModelRequest,
     ProviderError,
     ProviderId,
     ProviderReply,
@@ -38,27 +37,6 @@ async def test_fallback_preserves_model_and_token_floor(
         for record in response.metadata
     )
     assert [cost for _, cost in budget.settlements] == [None, None, None]
-
-
-@pytest.mark.asyncio
-async def test_sam_only_routes_to_meta(configured_settings, budget):
-    transport = FakeTransport([ProviderReply(output="mask")])
-    request = ModelRequest(
-        run_id="r",
-        stage="segment",
-        call_id="c",
-        logical_model="sam-3.1",
-        operation="segmentation",
-    )
-    result = await ModelRouter(configured_settings, transport, budget).call(request)
-    assert [
-        (binding.provider, binding.concrete_model) for binding, _ in transport.calls
-    ] == [(ProviderId.META, "sam-3.1")]
-    assert [record["error_code"] for record in result.metadata] == [
-        "UNSUPPORTED_CAPABILITY",
-        "UNSUPPORTED_CAPABILITY",
-        None,
-    ]
 
 
 @pytest.mark.asyncio

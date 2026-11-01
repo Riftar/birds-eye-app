@@ -109,7 +109,11 @@ class LedgerBudgetGuard:
             isinstance(n, int) and not isinstance(n, bool) and n >= 0
             for n in (prompt, completion)
         )
-        if valid:
+        if request.operation == "segmentation":
+            cost = (
+                worst if status == "success" or error_code == "TIMEOUT" else Decimal(0)
+            )
+        elif valid:
             input_price, cached_price, output_price = self.prices(provider, model)
             details = usage.get("prompt_tokens_details")
             cached = details.get("cached_tokens") if isinstance(details, dict) else 0
