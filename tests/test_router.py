@@ -3,6 +3,7 @@ from conftest import FakeBudgetGuard, FakeTransport
 
 from birds_eye.providers.contracts import (
     ModelBinding,
+    ModelRequest,
     ProviderError,
     ProviderId,
     ProviderReply,
@@ -19,7 +20,6 @@ async def test_fallback_preserves_model_and_token_floor(
     transport = FakeTransport(
         [
             ProviderError("TIMEOUT"),
-            ProviderError("RATE_LIMITED"),
             ProviderReply(output="ok"),
         ]
     )
@@ -27,7 +27,10 @@ async def test_fallback_preserves_model_and_token_floor(
         muse_request
     )
     assert response.logical_model == "muse-spark"
-    assert [binding.provider for binding, _ in transport.calls] == list(ProviderId)
+    assert [binding.provider for binding, _ in transport.calls] == [
+        ProviderId.BASETEN,
+        ProviderId.META,
+    ]
     assert all(
         request.logical_model == "muse-spark" and request.max_tokens == 400
         for _, request in transport.calls
@@ -36,7 +39,27 @@ async def test_fallback_preserves_model_and_token_floor(
         record["requested_max_tokens"] == 40 and record["effective_max_tokens"] == 400
         for record in response.metadata
     )
-    assert [cost for _, cost in budget.settlements] == [None, None, None]
+    assert [cost for _, cost in budget.settlements] == [None, None]
+
+
+@pytest.mark.asyncio
+async def test_sam_only_routes_to_meta(configured_settings, budget):
+    transport = FakeTransport([ProviderReply(output="mask")])
+    request = ModelRequest(
+        run_id="r",
+        stage="segment",
+        call_id="c",
+        logical_model="sam-3.1",
+        operation="segmentation",
+    )
+    result = await ModelRouter(configured_settings, transport, budget).call(request)
+    assert [
+        (binding.provider, binding.concrete_model) for binding, _ in transport.calls
+    ] == [(ProviderId.META, "sam-3.1")]
+    assert [record["error_code"] for record in result.metadata] == [
+        "UNSUPPORTED_CAPABILITY",
+        None,
+    ]
 
 
 @pytest.mark.asyncio
@@ -62,7 +85,7 @@ async def test_retryable_failure_falls_back(
     )
     assert len(transport.calls) == 2
     assert result.metadata[0]["status"] == "failed"
-    assert result.metadata[1]["provider"] == "modal"
+    assert result.metadata[1]["provider"] == "meta_model_api"
 
 
 @pytest.mark.asyncio
@@ -96,9 +119,8 @@ async def test_all_provider_failure_returns_typed_attempts(
     assert [r["error_code"] for r in error.value.attempts] == [
         "TIMEOUT",
         "RATE_LIMITED",
-        "PROVIDER_5XX",
     ]
-    assert len(budget.settlements) == 3
+    assert len(budget.settlements) == 2
 
 
 @pytest.mark.asyncio
@@ -111,7 +133,6 @@ async def test_missing_credentials_budget_and_capability_record_skips(
         await ModelRouter(settings, FakeTransport(), budget).call(muse_request)
     assert [r["error_code"] for r in error.value.attempts] == [
         "BUDGET_EXHAUSTED",
-        "NOT_CONFIGURED",
         "MISSING_CREDENTIALS",
     ]
     assert all(r["status"] == "skipped" for r in error.value.attempts)
@@ -150,19 +171,19 @@ async def test_disabled_transport_never_networks(muse_request):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("model_id", "endpoint"),
-    [(None, None), ("deployment", None), (None, "https://example.invalid/v1")],
-)
-async def test_unconfigured_live_modal_is_skipped(
-    settings, budget, muse_request, model_id, endpoint
+async def test_forced_baseten_failure_goes_straight_to_meta(
+    settings, budget, muse_request
 ):
     settings.provider_mode = "live"
-    settings.modal_muse_model_id = model_id
-    settings.modal_muse_endpoint = endpoint
+    settings.baseten_api_key = configured_secret()
     settings.model_api_key = configured_secret()
+    settings.force_fail_providers = "baseten"
     result = await ModelRouter(
         settings, FakeTransport([ProviderReply(output="ok")]), budget
     ).call(muse_request)
-    assert result.metadata[1]["status"] == "skipped"
-    assert result.metadata[1]["error_code"] == "NOT_CONFIGURED"
+    assert [record["provider"] for record in result.metadata] == [
+        "baseten",
+        "meta_model_api",
+    ]
+    assert result.metadata[0]["error_code"] == "FORCED_FAILURE"
+    assert result.metadata[1]["status"] == "success"

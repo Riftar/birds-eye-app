@@ -1,9 +1,9 @@
 import json
 from decimal import Decimal
 
+import httpx
 import pytest
 from conftest import FakeTransport
-from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
 from birds_eye.app import create_app
@@ -13,24 +13,30 @@ from birds_eye.providers.contracts import ProviderId, ProviderReply
 from birds_eye.providers.router import ModelRouter, NoCostBudget
 
 
-def test_stub_mode_uses_no_cost_budget(settings):
+@pytest.mark.asyncio
+async def test_stub_mode_uses_no_cost_budget(settings):
     settings.provider_mode = "stub"
     settings.ledger_path.write_text("invalid ledger")
     app = create_app(settings)
     assert isinstance(app.state.budget, NoCostBudget)
-    with TestClient(app) as client:
-        assert client.get("/healthz").status_code == 200
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        assert (await client.get("/healthz")).status_code == 200
         assert (
-            client.post("/meta/runs", json={"brief": "MOCK brief"}).status_code == 501
-        )
+            await client.post("/meta/runs", json={"brief": "MOCK brief"})
+        ).status_code == 501
 
 
-def test_live_mode_uses_ledger_guard(settings):
+@pytest.mark.asyncio
+async def test_live_mode_uses_ledger_guard(settings):
     settings.provider_mode = "live"
     app = create_app(settings)
     assert isinstance(app.state.budget, LedgerBudgetGuard)
-    with TestClient(app) as client:
-        assert client.get("/healthz").status_code == 200
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        assert (await client.get("/healthz")).status_code == 200
 
 
 def test_corrupt_ledger_line_is_skipped_and_counted_valid_lines(
@@ -95,12 +101,15 @@ async def test_cap_reached_skips_provider_and_falls_back(ledger_settings, muse_r
     assert result.metadata[-1]["provider"] == "meta_model_api"
 
 
-def test_all_capped_returns_402_structured_body(ledger_settings):
+@pytest.mark.asyncio
+async def test_all_capped_returns_402_structured_body(ledger_settings):
     ledger_settings.baseten_budget_cap_usd = Decimal(0)
     ledger_settings.meta_model_api_budget_cap_usd = Decimal(0)
     app = create_app(ledger_settings)
-    with TestClient(app) as client:
-        response = client.post("/meta/runs", json={"brief": "MOCK brief"})
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post("/meta/runs", json={"brief": "MOCK brief"})
     from birds_eye.providers.logging import logger
 
     for handler in logger.handlers[:]:

@@ -215,8 +215,6 @@ class ModelRouter:
         }
         credentials = {
             ProviderId.BASETEN: self.settings.baseten_api_key,
-            ProviderId.MODAL: self.settings.modal_token_id
-            and self.settings.modal_token_secret,
             ProviderId.META: self.settings.model_api_key,
         }
         records = []
@@ -234,12 +232,7 @@ class ModelRouter:
             "SAFETY_REFUSAL",
             "MALFORMED_RESPONSE",
         }
-        providers = (
-            (ProviderId.BASETEN, ProviderId.META)
-            if request.operation == "segmentation"
-            else ProviderId
-        )
-        for provider in providers:
+        for provider in (ProviderId.BASETEN, ProviderId.META):
             binding = available.get(provider)
             for retry in range(self.settings.provider_max_retries + 1):
                 effort = (
@@ -282,12 +275,7 @@ class ModelRouter:
                 usage = None
                 try:
                     if not binding:
-                        record["error_code"] = (
-                            "NOT_CONFIGURED"
-                            if provider == ProviderId.MODAL
-                            and request.logical_model == "muse-spark"
-                            else "UNSUPPORTED_CAPABILITY"
-                        )
+                        record["error_code"] = "UNSUPPORTED_CAPABILITY"
                     elif not credentials[provider]:
                         record["error_code"] = "MISSING_CREDENTIALS"
                     else:
@@ -425,8 +413,7 @@ class ModelRouter:
         eligible = [
             r
             for r in records
-            if r["error_code"]
-            not in {"MISSING_CREDENTIALS", "NOT_CONFIGURED", "UNSUPPORTED_CAPABILITY"}
+            if r["error_code"] not in {"MISSING_CREDENTIALS", "UNSUPPORTED_CAPABILITY"}
         ]
         if eligible and all(r["error_code"] == "BUDGET_EXHAUSTED" for r in eligible):
             raise RoutingError(

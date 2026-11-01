@@ -63,10 +63,6 @@ class LiveTransport:
                 self.settings.meta_model_api_base_url,
                 self.settings.model_api_key,
             ),
-            ProviderId.MODAL: (
-                self.settings.modal_muse_endpoint,
-                self.settings.modal_token_secret,
-            ),
         }
         url, key = configs[binding.provider]
         if not url or not key:

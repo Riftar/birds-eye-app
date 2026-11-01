@@ -57,10 +57,7 @@ def fake_rate_limiter(monkeypatch):
 def settings(monkeypatch, tmp_path):
     for name in (
         "BASETEN_API_KEY",
-        "MODAL_TOKEN_ID",
-        "MODAL_TOKEN_SECRET",
         "MODEL_API_KEY",
-        "MODAL_MUSE_MODEL_ID",
         "DEFAULT_SCENARIO_DIR",
         "PROVIDER_MODE",
         "FORCE_FAIL_PROVIDERS",
@@ -69,7 +66,6 @@ def settings(monkeypatch, tmp_path):
         "MUSE_MAX_TOKENS_DEFAULT",
         "BASETEN_BASE_URL",
         "META_MODEL_API_BASE_URL",
-        "MODAL_MUSE_ENDPOINT",
         "META_REASONING_EFFORT",
         "SAM_MASK_ENCODING",
         "SAM_INCLUDE_CONFIDENCE",
@@ -82,10 +78,7 @@ def settings(monkeypatch, tmp_path):
 @pytest.fixture
 def configured_settings(settings):
     settings.baseten_api_key = SecretStr("FAKE_BASETEN_SECRET")
-    settings.modal_token_id = SecretStr("FAKE_MODAL_ID")
-    settings.modal_token_secret = SecretStr("FAKE_MODAL_SECRET")
     settings.model_api_key = SecretStr("FAKE_META_SECRET")
-    settings.modal_muse_model_id = "mock-modal-muse-deployment"
     return settings
 
 

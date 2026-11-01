@@ -73,7 +73,7 @@ class LedgerBudgetGuard:
         )
 
     def cap(self, provider):
-        return getattr(self.settings, f"{provider.value}_budget_cap_usd")
+        return getattr(self.settings, f"{provider.value}_budget_cap_usd", None)
 
     def summary(self):
         return {
