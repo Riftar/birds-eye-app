@@ -93,7 +93,7 @@ Planner, Writer and Reviewer call Muse Spark live when live mode is enabled; SAM
 
 `birds_eye/core` holds shared inputs and lifecycle validation; `birds_eye/providers` holds routing contracts and transports; `birds_eye/meta` and `birds_eye/tencent` expose the two boundaries in one FastAPI app. `mock-data/default` contains a fake creator scenario. Inputs are read afresh for each run and retained as a snapshot. Git-backed artifacts, durable claims, authenticated decisions, scheduling and publishing are future work. Reviewer approval permits review passage, never human approval; revisions stay in review.
 
-Per-run call and token caps limit the live demo. Live calls also use a persistent per-provider USD ledger and caps. The Meta contributor and standard models and the Baseten model have default prices. The full gated workflow and SAM integration remain future work.
+Per-run call and token caps limit the live demo. Live calls also use a persistent per-provider USD ledger and caps. The Meta contributor and standard models and the Baseten model have default prices. The full gated workflow remains future work. SAM segmentation is available through the model router with image size and per-run call limits.
 
 ## Setup and commands
 
@@ -127,4 +127,4 @@ PROVIDER_MODE=live uv run uvicorn birds_eye.app:create_app --factory --port 8000
 
 Open `/` and submit a brief. The product sheet and rulebook are MOCK data. To exercise fallback, set `FORCE_FAIL_PROVIDERS=baseten`; the forced attempt is recorded without making a provider request. The creator brief is the primary input for every stage; the mock product sheet and rulebook provide secondary constraints. `PLANNER_MAX_TOKENS=4000`, `WRITER_MAX_TOKENS=4000`, and `REVIEWER_MAX_TOKENS=3000` set completion budgets (minimum 400). `MAX_CALLS_PER_RUN=12` and `MAX_TOKENS_PER_RUN=24000` limit the run, including retries and prompt usage. Timeouts retain their full reservation. `META_MUSE_MODEL` defaults to `muse-spark-1.3-contributor`; `META_CONTRIBUTOR_RPM` defaults to 150, with calls limited to at most 140 RPM for headroom. Provider price overrides remain available; unknown Meta models need explicit input and output prices. `PROVIDER_MAX_RETRIES=2` and `PROVIDER_RETRY_BASE_SECONDS=1` control exponential backoff with jitter; `PROVIDER_TIMEOUT_SECONDS=120` controls the timeout. `REASONING_EFFORT=low` applies to both providers, with optional `META_REASONING_EFFORT` override. Truncated outputs and failed attempts are shown in the results.
 
-`modal_app.py` remains an optional hosting entry point. It is unused and not deployed; Modal is not part of the Muse routing chain. The ledger persists settled costs at `LEDGER_PATH` (default `var/ledger.jsonl`).
+The ledger persists settled costs at `LEDGER_PATH` (default `var/ledger.jsonl`).

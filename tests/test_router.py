@@ -1,7 +1,12 @@
+import base64
+import io
+
 import pytest
 from conftest import FakeBudgetGuard, FakeTransport
+from PIL import Image
 
 from birds_eye.providers.contracts import (
+    MediaInput,
     ModelBinding,
     ModelRequest,
     ProviderError,
@@ -45,12 +50,21 @@ async def test_fallback_preserves_model_and_token_floor(
 @pytest.mark.asyncio
 async def test_sam_only_routes_to_meta(configured_settings, budget):
     transport = FakeTransport([ProviderReply(output="mask")])
+    image_buffer = io.BytesIO()
+    Image.new("RGB", (1, 1), "red").save(image_buffer, format="PNG")
+    image_bytes = image_buffer.getvalue()
     request = ModelRequest(
         run_id="r",
         stage="segment",
         call_id="c",
         logical_model="sam-3.1",
         operation="segmentation",
+        media=MediaInput(
+            mime="image/png",
+            data_url="data:image/png;base64,"
+            + base64.b64encode(image_bytes).decode("ascii"),
+            bytes_len=len(image_bytes),
+        ),
     )
     result = await ModelRouter(configured_settings, transport, budget).call(request)
     assert [

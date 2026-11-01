@@ -29,6 +29,31 @@ class LiveTransport:
 
         from birds_eye.providers.contracts import ProviderId
 
+        if request.operation == "segmentation":
+            from birds_eye.providers.sam import segment
+
+            if binding.provider != ProviderId.META or request.media is None:
+                raise ProviderError("INVALID_REQUEST")
+
+            async def invoke_sam(client):
+                return await segment(
+                    client,
+                    self.settings.meta_model_api_base_url,
+                    self.settings.model_api_key,
+                    request.media,
+                    request.prompt,
+                    self.settings.provider_timeout_seconds,
+                    mask_encoding=self.settings.sam_mask_encoding,
+                    include_confidence=self.settings.sam_include_confidence,
+                )
+
+            if self.client is None:
+                async with httpx.AsyncClient() as client:
+                    result = await invoke_sam(client)
+            else:
+                result = await invoke_sam(self.client)
+            return ProviderReply(output=result.model_dump(), usage={"images": 1})
+
         configs = {
             ProviderId.BASETEN: (
                 self.settings.baseten_base_url,

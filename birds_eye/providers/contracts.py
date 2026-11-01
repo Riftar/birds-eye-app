@@ -20,12 +20,24 @@ class ModelBinding(BaseModel):
     operation: Literal["text", "segmentation"]
 
 
+class MediaInput(BaseModel):
+    kind: Literal["image"] = "image"
+    mime: str
+    data_url: str
+    bytes_len: int = Field(ge=0)
+
+    @property
+    def image_url(self) -> str:
+        return self.data_url
+
+
 class ModelRequest(BaseModel):
     run_id: str
     stage: str
     call_id: str
     logical_model: str
     operation: Literal["text", "segmentation"]
+    media: MediaInput | None = None
     prompt: str = ""
     instructions: str = ""
     max_tokens: int | None = Field(default=None, gt=0)
