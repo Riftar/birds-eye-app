@@ -176,7 +176,11 @@ async def test_pipeline_and_routes(settings, review, decision):
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
         page = await client.get("/")
-        assert "textarea" in page.text and "MOCK" in page.text
+        assert 'id="brief" class="textarea"' in page.text and "MOCK" in page.text
+        assert 'href="/design/tokens.css"' in page.text
+        assert 'href="/design/components.css"' in page.text
+        for stylesheet in ("tokens.css", "components.css", "base.css"):
+            assert (await client.get(f"/design/{stylesheet}")).status_code == 200
         response = await client.post("/meta/runs", json={"brief": "test"})
         assert response.status_code == 200
         assert all(
