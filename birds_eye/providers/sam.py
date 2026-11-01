@@ -17,13 +17,11 @@ from __future__ import annotations
 
 import math
 import re
-import time
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from birds_eye.providers.contracts import ProviderError
-from birds_eye.providers.logging import log_attempt
 
 MODEL_ID = "sam-3.1"
 PROVIDER_ID = "meta_model_api"
@@ -386,29 +384,6 @@ async def segment(
 
     import httpx
 
-    record = {
-        "event": "provider_attempt",
-        "run_id": None,
-        "stage": "segment",
-        "call_id": None,
-        "attempt": 1,
-        "logical_model": MODEL_ID,
-        "provider": PROVIDER_ID,
-        "model": MODEL_ID,
-        "concrete_model": MODEL_ID,
-        "status": "failed",
-        "error_code": None,
-        "latency_ms": 0,
-        "requested_max_tokens": None,
-        "effective_max_tokens": None,
-        "max_completion_tokens": None,
-        "reasoning_effort": None,
-        "usage": None,
-        "cost_usd": None,
-        "finish_reason": None,
-        "truncated": False,
-    }
-    start = time.monotonic()
     try:
         body = build_request_body(
             prompt,
@@ -416,35 +391,29 @@ async def segment(
             mask_encoding=mask_encoding,
             include_confidence=include_confidence,
         )
-        headers = {
-            # The key value is used here only; it never enters logs or records.
-            "Authorization": "Bearer " + key.get_secret_value(),
-            "Accept": "text/event-stream",
-        }
-        try:
-            async with client.stream(
-                "POST",
-                base_url.rstrip("/") + "/responses",
-                headers=headers,
-                json=body,
-                timeout=timeout,
-            ) as response:
-                if response.status_code >= 400:
-                    raise _error_for_status(response.status_code)
-                text = await _read_output_text(response)
-        except httpx.TimeoutException:
-            raise ProviderError("TIMEOUT") from None
-        except httpx.RequestError:
-            raise ProviderError("CONNECTION_ERROR") from None
-        result = parse_segmentation_text(text)
-        record["status"] = "success"
-        return result
-    except ProviderError as exc:
-        record["error_code"] = exc.code
-        raise
-    finally:
-        record["latency_ms"] = round((time.monotonic() - start) * 1000, 3)
-        log_attempt(record)
+    except ValueError:
+        raise ProviderError("INVALID_REQUEST") from None
+    headers = {
+        # The key value is used here only; it never enters logs or records.
+        "Authorization": "Bearer " + key.get_secret_value(),
+        "Accept": "text/event-stream",
+    }
+    try:
+        async with client.stream(
+            "POST",
+            base_url.rstrip("/") + "/responses",
+            headers=headers,
+            json=body,
+            timeout=timeout,
+        ) as response:
+            if response.status_code >= 400:
+                raise _error_for_status(response.status_code)
+            text = await _read_output_text(response)
+    except httpx.TimeoutException:
+        raise ProviderError("TIMEOUT") from None
+    except httpx.RequestError:
+        raise ProviderError("CONNECTION_ERROR") from None
+    return parse_segmentation_text(text)
 
 
 __all__ = [  # noqa: RUF022 - grouped constants, models, functions.

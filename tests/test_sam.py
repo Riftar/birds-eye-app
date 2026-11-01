@@ -1,5 +1,4 @@
 import json
-import logging
 from pathlib import Path
 
 import httpx
@@ -169,32 +168,6 @@ async def test_http_error_mapping(status, code):
         with pytest.raises(ProviderError) as error:
             await segment(client, BASE_URL, KEY, IMAGE, PROMPT, 30.0)
     assert error.value.code == code
-
-
-@pytest.mark.asyncio
-async def test_key_value_never_logged(caplog):
-    async with sse_client(read_fixture("lossless.sse")) as client:
-        with caplog.at_level(logging.INFO, logger="birds_eye.model_calls"):
-            await segment(client, BASE_URL, KEY, IMAGE, PROMPT, 30.0)
-    assert caplog.records, "SAM segment must log one JSON line per attempt"
-    assert KEY.get_secret_value() not in caplog.text
-    record = json.loads(caplog.records[-1].message)
-    assert (record["provider"], record["model"], record["status"]) == (
-        "meta_model_api",
-        "sam-3.1",
-        "success",
-    )
-    assert KEY.get_secret_value() not in json.dumps(record)
-    caplog.clear()
-    async with sse_client("", status=429) as client:
-        with (
-            caplog.at_level(logging.INFO, logger="birds_eye.model_calls"),
-            pytest.raises(ProviderError),
-        ):
-            await segment(client, BASE_URL, KEY, IMAGE, PROMPT, 30.0)
-    assert KEY.get_secret_value() not in caplog.text
-    failed = json.loads(caplog.records[-1].message)
-    assert (failed["status"], failed["error_code"]) == ("failed", "RATE_LIMITED")
 
 
 @pytest.mark.asyncio

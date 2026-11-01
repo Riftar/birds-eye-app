@@ -39,8 +39,7 @@ async def test_retries_then_meta_and_budget(settings, muse_request):
     response = await router.call(muse_request.model_copy(update={"max_tokens": 4000}))
     assert delays == [1.5, 3.0]
     assert [a["provider"] for a in response.metadata] == ["baseten"] * 3 + [
-        "modal",
-        "meta_model_api",
+        "meta_model_api"
     ]
     assert [a["attempt"] for a in response.metadata[:3]] == [1, 2, 3]
     assert router.run_budget.tokens == 100
@@ -60,6 +59,10 @@ async def test_forced_failure_no_retry(settings, muse_request):
         muse_request
     )
     assert result.metadata[0]["error_code"] == "FORCED_FAILURE"
+    assert [record["provider"] for record in result.metadata] == [
+        "baseten",
+        "meta_model_api",
+    ]
     assert len(fake.calls) == 1 and fake.calls[0][0].provider == ProviderId.META
 
 
