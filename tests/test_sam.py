@@ -245,17 +245,24 @@ async def test_missing_image_url_is_invalid_request():
 
 
 @pytest.mark.asyncio
-async def test_file_id_only_media_is_invalid_request_until_files_api():
+async def test_file_id_image_media_sends_file_id_not_url():
     captured = []
     async with sse_client(read_fixture("lossless.sse"), captured=captured) as client:
-        with pytest.raises(ProviderError) as error:
-            await segment(
-                client,
-                BASE_URL,
-                KEY,
-                MediaInput(file_id="file_mock_123"),
-                PROMPT,
-                30.0,
-            )
-    assert error.value.code == "INVALID_REQUEST"
-    assert captured == []
+        result = await segment(
+            client,
+            BASE_URL,
+            KEY,
+            MediaInput(file_id="file_mock_123"),
+            PROMPT,
+            30.0,
+        )
+    assert len(result.objects) == 1
+    body = json.loads(captured[0].content.decode())
+    _, image_part = body["input"][0]["content"]
+    assert image_part == {"type": "input_image", "file_id": "file_mock_123"}
+    assert "image_url" not in image_part
+
+
+def test_image_url_never_returns_file_id_as_url():
+    with pytest.raises(ValueError, match="data_url"):
+        _ = MediaInput(file_id="file_mock_123").image_url

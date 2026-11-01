@@ -37,9 +37,15 @@ except ImportError:  # pragma: no cover - decoder absent.
 
 
 class MediaInput(BaseModel):
-    """Image input for segmentation. ``data_url`` is a data: or https: URL."""
+    """Media input for segmentation.
 
-    kind: Literal["image"] = "image"
+    Images use inline ``data_url`` (data: or https: URL); video (MP4/MOV)
+    and oversized bytes use a Files API ``file_id`` (see
+    ``birds_eye.providers.meta_files``). ``image_url`` never returns a
+    ``file_id`` as a URL.
+    """
+
+    kind: Literal["image", "video"] = "image"
     data_url: str | None = None
     file_id: str | None = None
     mime: str | None = None
@@ -49,10 +55,25 @@ class MediaInput(BaseModel):
     def image_url(self) -> str:
         if self.data_url:
             return self.data_url
-        if self.file_id:
-            # TODO(#19): route Files API IDs through the upload/reference path.
-            raise ValueError("MediaInput file_id requires the Files API path.")
         raise ValueError("MediaInput needs data_url.")
+
+
+def build_media_part(media: MediaInput) -> dict:
+    """Build the ``input_image``/``input_video`` part for a media input.
+
+    Inline ``data_url`` media reference the URL; Files API media reference
+    the ``file_id`` directly, never as a URL.
+    """
+
+    if media.file_id:
+        if media.kind == "video":
+            return {"type": "input_video", "file_id": media.file_id}
+        return {"type": "input_image", "file_id": media.file_id}
+    if media.data_url:
+        if media.kind == "video":
+            return {"type": "input_video", "video_url": media.data_url}
+        return {"type": "input_image", "image_url": media.data_url}
+    raise ValueError("MediaInput needs data_url or file_id.")
 
 
 class Box(BaseModel):
@@ -251,11 +272,18 @@ def parse_segmentation_text(text: str) -> SegmentationResult:
 
 def build_request_body(
     prompt: str,
-    image_url: str,
+    image: str | MediaInput,
     *,
     mask_encoding: str | None = None,
     include_confidence: bool = False,
 ) -> dict:
+    if isinstance(image, str):
+        media_part: dict = {"type": "input_image", "image_url": image}
+    else:
+        try:
+            media_part = build_media_part(image)
+        except ValueError:
+            raise ProviderError("INVALID_REQUEST") from None
     body: dict = {
         "model": MODEL_ID,
         "stream": True,
@@ -265,7 +293,7 @@ def build_request_body(
                 "role": "user",
                 "content": [
                     {"type": "input_text", "text": prompt},
-                    {"type": "input_image", "image_url": image_url},
+                    media_part,
                 ],
             }
         ],
@@ -382,13 +410,9 @@ async def segment(
     }
     start = time.monotonic()
     try:
-        try:
-            image_url = image.image_url
-        except ValueError:
-            raise ProviderError("INVALID_REQUEST") from None
         body = build_request_body(
             prompt,
-            image_url,
+            image,
             mask_encoding=mask_encoding,
             include_confidence=include_confidence,
         )
@@ -431,6 +455,7 @@ __all__ = [  # noqa: RUF022 - grouped constants, models, functions.
     "MediaInput",
     "SegmentedObject",
     "SegmentationResult",
+    "build_media_part",
     "build_request_body",
     "parse_segmentation_text",
     "segment",
