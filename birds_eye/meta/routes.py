@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from birds_eye.core.contracts import RunInputs
 from birds_eye.core.inputs import load_inputs, make_context
 from birds_eye.meta.pipeline import run_meta
+from birds_eye.meta.posts import create_post
 from birds_eye.providers.contracts import RoutingError
 from birds_eye.providers.router import ModelRouter
 from birds_eye.providers.transport import LiveTransport
@@ -67,15 +68,18 @@ async def run(request: Request, inputs: BriefRequest | RunInputs | None = None):
                 context, ModelRouter(settings, transport, request.app.state.budget)
             )
         ).model_dump(mode="json")
-        request.app.state.ledger = request.app.state.budget.summary()
+        request.app.state.ledger = getattr(request.app.state.budget, "summary", dict)()
         result["ledger"] = request.app.state.ledger
+        result["post"] = create_post(
+            request.app, result["stages"][-1].get("decision") == "approve"
+        )
         return result
     except RoutingError as exc:
-        request.app.state.ledger = request.app.state.budget.summary()
+        request.app.state.ledger = getattr(request.app.state.budget, "summary", dict)()
         return JSONResponse(
             status_code=402 if exc.code == "PROVIDER_BUDGET_EXHAUSTED" else 502,
             content={
-                "ledger": request.app.state.budget.summary(),
+                "ledger": getattr(request.app.state.budget, "summary", dict)(),
                 "code": exc.code,
                 "message": exc.message,
                 "attempts": exc.attempts,

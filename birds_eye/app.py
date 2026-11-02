@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from birds_eye.config import Settings
+from birds_eye.meta.posts import router as posts_router
 from birds_eye.meta.routes import router as meta_router
 from birds_eye.tencent.routes import router as tencent_router
 
@@ -33,7 +34,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.ledger = {}
     design_dir = Path(__file__).resolve().parent.parent / "design"
     app.mount("/design", StaticFiles(directory=design_dir), name="design")
+    app.state.posts = {}
     app.include_router(meta_router)
+    app.include_router(posts_router)
     app.include_router(tencent_router)
 
     @app.exception_handler(OSError)
