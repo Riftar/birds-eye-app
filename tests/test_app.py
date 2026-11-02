@@ -1,6 +1,7 @@
 import asyncio
 import re
 import shutil
+from pathlib import Path
 
 import httpx
 import pytest
@@ -32,3 +33,25 @@ async def test_home_script_escapes_truncation_newline(settings):
     )
     _, stderr = await process.communicate(script.group(1).encode())
     assert process.returncode == 0, stderr.decode()
+
+
+@pytest.mark.asyncio
+async def test_demo_rendering_and_pending_run(settings):
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is required to exercise the demo renderer")
+    transport = httpx.ASGITransport(app=create_app(settings))
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        html = (await client.get("/")).text
+        css = (await client.get("/design/components.css")).text
+    script = re.search(r"<script>(.*?)</script>", html, re.DOTALL)
+    assert script
+    harness = Path("tests/ui_demo_check.js").read_text()
+    process = await asyncio.create_subprocess_exec(
+        node, stdin=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    )
+    _, stderr = await process.communicate(
+        (harness + "\n" + script.group(1) + "\nverifyDemo().catch(e => { console.error(e); process.exitCode = 1; });").encode()
+    )
+    assert process.returncode == 0, stderr.decode()
+    assert re.search(r"\.output\s*\{[^}]*font-family:\s*var\(--font-body\)", css)

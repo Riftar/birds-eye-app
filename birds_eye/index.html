@@ -141,7 +141,7 @@ function renderPlan(v) {
 }
 function renderDraft(v) {
   const card = el('article', 'post well');
-  const meta = el('div', 'post__meta'); meta.append(el('span', 'chip', v.format === 'carousel' ? 'Carousel' : 'Short video'), el('span', 'measured', (v.beats || []).length + (v.format === 'carousel' ? ' slides' : ' beats')));
+  const meta = el('div', 'post__meta'); meta.append(el('span', 'chip', v.format === 'carousel' ? 'Carousel' : 'Short video'), el('span', 'small', (v.beats || []).length + (v.format === 'carousel' ? ' slides' : ' beats')));
   const ol = el('ol', 'slides');
   (v.beats || []).forEach(b => { const li = el('li'); li.append(el('span', 'slide__label', b.label), el('span', '', b.text)); ol.append(li); });
   card.append(meta, ol);
@@ -154,7 +154,7 @@ function renderVerdict(v) {
   row.append(el('span', 'chip chip--' + (v.decision === 'approve' ? 'done' : 'cutoff'), v.decision === 'approve' ? 'Approved by Reviewer' : 'Sent back for changes'));
   wrap.append(row);
   if (!v.findings || !v.findings.length) wrap.append(el('p', 'muted small', 'No findings'));
-  else { const ul = el('ul'); v.findings.forEach(f => { const li = el('li'); if (f.rule_id) li.append(el('code', 'measured', f.rule_id), document.createTextNode(' ')); li.append(document.createTextNode(f.message)); ul.append(li); }); wrap.append(ul); }
+  else { const ul = el('ul'); v.findings.forEach(f => { const li = el('li'); if (f.rule_id) li.append(el('code', 'measured', f.rule_id), document.createTextNode(' ')); li.append(document.createTextNode(typeof f === 'string' ? f : f.message)); ul.append(li); }); wrap.append(ul); }
   return wrap;
 }
 
@@ -177,6 +177,7 @@ function renderStage(stage) {
   const v = parsed(stage), kind = String(stage.stage).toLowerCase();
   if (v && kind === 'planner') section.append(renderPlan(v));
   else if (v && kind === 'writer') section.append(renderDraft(v));
+  else if (kind === 'reviewer' && !stage.failed && stage.decision) section.append(renderVerdict({decision: stage.decision, findings: stage.findings || []}));
   else if (v && kind === 'reviewer') section.append(renderVerdict(v));
   else if (stage.output) section.append(el('pre', 'output', stage.output));
   if (stage.truncated) section.append(alertBox('truncated'));
