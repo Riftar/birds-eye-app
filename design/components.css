@@ -101,7 +101,7 @@ body { font-size: var(--text-md); }
 .attempt > :nth-child(3) { grid-area: note; }
 .attempt > .chip { grid-area: badge; justify-self: end; }
 .attempt .code { color: var(--be-bad); }
-.output { margin: 0; padding: var(--space-md); max-height: 16rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-outlier); font-size: var(--text-sm); line-height: 1.6; color: var(--color-ink-2); background: var(--color-paper-3); border: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-pill); }
+.output { margin: 0; padding: var(--space-md); max-height: 16rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-body); font-size: var(--text-sm); line-height: 1.6; color: var(--color-ink-2); background: var(--color-paper-3); border: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-pill); }
 .fallback-note { font-size: var(--text-sm); color: var(--be-model); }
 .skeleton { display: grid; gap: var(--space-xs); }
 .skeleton span { display: block; height: 12px; border-radius: var(--radius-chip); background: var(--color-rule); }
