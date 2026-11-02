@@ -15,7 +15,7 @@ async def test_home_script_escapes_truncation_newline(settings):
         html = (await client.get("/")).text
 
     assert "'\n(output truncated" not in html
-    assert "'\\n(output truncated" in html
+    assert "Output cut off" in html
 
     title = re.search(r"<title>(.*?)</title>", html, re.DOTALL)
     assert title and ":" in title.group(1) and "—" not in title.group(1)

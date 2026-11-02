@@ -4,10 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Birds Eye: Meta demo</title>
+  <meta name="description" content="Birds Eye Meta demo: one creator brief runs through Planner, Writer and Reviewer agents, then waits for a person at two approval gates.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500&family=Atkinson+Hyperlegible+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/design/tokens.css">
+  <link rel="stylesheet" href="/design/base.css">
   <link rel="stylesheet" href="/design/components.css">
 </head>
 <body>
@@ -20,90 +22,224 @@
       <form id="form" class="panel field">
         <label for="brief">Creator brief</label>
         <p class="help" id="brief-help">Say what the post is about, the platform, who it’s for, and anything off limits.</p>
-        <textarea id="brief" class="textarea" required maxlength="4000" rows="8" cols="70" aria-describedby="brief-help" placeholder="e.g. Instagram carousel for our iced palm-sugar latte, aimed at office workers"></textarea>
-        <div class="row"><button class="btn btn--primary">Run pipeline</button></div>
+        <textarea id="brief" class="textarea" required maxlength="4000" rows="8" aria-describedby="brief-help" placeholder="e.g. Instagram carousel for our iced palm-sugar latte, aimed at office workers"></textarea>
+        <div class="row"><button id="run" class="btn">Run pipeline</button></div>
         <p class="notice"><span class="chip chip--mock">MOCK data</span><span>The product sheet and rulebook are samples. Nothing gets published.</span></p>
       </form>
-      <div id="result" class="field" aria-live="polite"><div class="empty"><span class="empty__title">No runs yet</span><p>Write a brief and run it. Each agent’s step shows up here.</p></div></div>
+      <div class="field">
+        <div id="result" class="field" aria-live="polite"><div class="empty"><span class="empty__title">No runs yet</span><p>Write a brief and run it. Each agent’s step shows up here as it happens.</p></div></div>
+
+        <!-- Shown only when the run response carries a post. Driven by the server, never faked in the browser. -->
+        <section id="post-area" class="field" hidden aria-labelledby="post-h">
+          <h2 id="post-h" class="step__name">Post</h2>
+          <ol id="lifecycle" class="lifecycle" aria-label="Post lifecycle"></ol>
+          <div id="gate-error"></div>
+
+          <div id="gate1" class="gate panel" aria-label="Gate 1" hidden>
+            <div class="row"><span class="chip chip--gate">Gate 1</span><span class="chip chip--stage is-current">Draft</span></div>
+            <div class="gate__actions" data-step="ask">
+              <button class="btn btn--primary" type="button" data-open="confirm">Approve draft</button>
+              <button class="btn" type="button" data-open="reject">Reject draft</button>
+            </div>
+            <div class="well gate__confirm" data-step="confirm" hidden>
+              <p>Approve this draft? It moves to Approved.</p>
+              <div class="gate__actions" style="margin-top: var(--space-sm)">
+                <button class="btn btn--primary" type="button" data-go="approved">Approve draft</button>
+                <button class="btn" type="button" data-open="ask">Cancel</button>
+              </div>
+            </div>
+            <div class="field" data-step="reject" hidden>
+              <label for="reject1">Why are you rejecting this draft?</label>
+              <textarea class="textarea" id="reject1" style="min-height: 80px"></textarea>
+              <div class="row"><button class="btn" type="button" data-reject="reject1">Reject draft</button><button class="btn" type="button" data-open="ask">Cancel</button></div>
+            </div>
+          </div>
+
+          <div id="gate2" class="gate panel" aria-label="Gate 2" hidden>
+            <div class="row"><span class="chip chip--gate">Gate 2</span><span class="chip chip--stage is-current">Review passed</span></div>
+            <div class="gate__actions" data-step="ask">
+              <button class="btn btn--primary" type="button" data-open="confirm">Schedule post</button>
+              <button class="btn" type="button" data-open="reject">Reject post</button>
+            </div>
+            <div class="well gate__confirm" data-step="confirm" hidden>
+              <p>Schedule this post? It moves to Scheduled. Nothing is published in this demo.</p>
+              <div class="gate__actions" style="margin-top: var(--space-sm)">
+                <button class="btn btn--primary" type="button" data-go="scheduled">Schedule post</button>
+                <button class="btn" type="button" data-open="ask">Cancel</button>
+              </div>
+            </div>
+            <div class="field" data-step="reject" hidden>
+              <label for="reject2">Why are you rejecting this post?</label>
+              <textarea class="textarea" id="reject2" style="min-height: 80px"></textarea>
+              <div class="row"><button class="btn" type="button" data-reject="reject2">Reject post</button><button class="btn" type="button" data-open="ask">Cancel</button></div>
+            </div>
+          </div>
+
+          <p id="skip-row" hidden><button id="skip" class="linkbtn" type="button">Try to skip straight to Scheduled</button></p>
+
+          <div class="panel field">
+            <h3 class="step__name">Audit log</h3>
+            <ol id="trail" class="trail"></ol>
+          </div>
+        </section>
+      </div>
     </div>
   </section>
 </main>
 <script>
-const form = document.querySelector('#form'), result = document.querySelector('#result');
-const element = (tag, classes, text) => {
-  const node = document.createElement(tag);
-  node.className = classes;
-  if (text != null) node.textContent = text;
-  return node;
+const $ = s => document.querySelector(s);
+const form = $('#form'), result = $('#result'), runBtn = $('#run');
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+
+const STAGES = ['planner', 'writer', 'reviewer'];
+const NAMES = {planner: 'Planner', writer: 'Writer', reviewer: 'Reviewer'};
+const LIFECYCLE = [['idea','Idea'],['draft','Draft'],['approved','Approved',1],['in_review','In review'],['review_passed','Review passed'],['scheduled','Scheduled',1],['published','Published']];
+const ERRORS = {
+  HUMAN_ONLY: ['Only a person can decide this', 'Agents can’t approve or reject at this gate. Use the buttons to decide it yourself.'],
+  CLAIM_LOST: ['This agent’s claim ended', 'This agent’s claim is no longer active, so it stopped. The audit log shows what happened.'],
+  INVALID_TRANSITION: ['This post can’t move there', 'Posts move one stage at a time, in order. This change skips a stage or goes backward, so it was blocked.'],
+  truncated: ['Output cut off', 'The model hit its length limit before finishing, so this output is incomplete. Run the step again or shorten the brief.'],
+  PROVIDERS_EXHAUSTED: ['Every provider failed', 'Every provider in the chain failed on this step, so the run stopped here. Try again in a few minutes.'],
 };
-const renderOutput = stage => {
-  let value;
-  try { value = JSON.parse(stage.output); }
-  catch (_) { return element('pre', 'output', stage.output + (stage.truncated ? '\n(output truncated at token limit)' : '')); }
-  const output = element('div', 'output');
-  const render = (parent, item) => {
-    if (item !== null && typeof item === 'object') {
-      const list = element(Array.isArray(item) ? 'ul' : 'dl', '');
-      for (const [key, child] of Object.entries(item)) {
-        if (Array.isArray(item)) {
-          const entry = element('li', '');
-          render(entry, child);
-          list.append(entry);
-        } else {
-          list.append(element('dt', '', key.replace(/_/g, ' ')));
-          const entry = element('dd', '');
-          render(entry, child);
-          list.append(entry);
-        }
-      }
-      parent.append(list);
-    } else {
-      parent.append(document.createTextNode(item == null ? '—' : String(item)));
-    }
-  };
-  render(output, value);
-  if (stage.truncated) output.append(element('p', '', 'Output truncated at token limit'));
-  return output;
-};
+
+const money = v => v == null ? null : '$' + Number(v).toFixed(4);
+const secs = ms => ms == null ? null : (ms / 1000).toFixed(1) + 's';
+const clock = iso => { try { return new Date(iso).toLocaleTimeString('en-GB', {hour12: false}); } catch (_) { return iso; } };
+
+function alertBox(code, fallbackMsg) {
+  const [title, body] = ERRORS[code] || ['Unable to complete the run', fallbackMsg || 'Something went wrong. Try again.'];
+  const a = el('div', 'alert'); a.setAttribute('role', 'alert');
+  const h = el('div', 'alert__title'); h.append(el('span', '', title));
+  if (code) h.append(el('code', 'measured alert__code', code));
+  a.append(h, el('p', '', body)); return a;
+}
+
+function skeletonCards() {
+  result.replaceChildren(...STAGES.map((s, i) => {
+    const c = el('section', 'step panel'); c.setAttribute('aria-label', NAMES[s] + ' step, ' + (i ? 'waiting' : 'loading'));
+    const h = el('div', 'step__head'); h.append(el('h2', 'step__name', NAMES[s]), el('span', 'chip chip--' + (i ? 'waiting' : 'running'), i ? 'Waiting' : 'Running'));
+    c.append(h);
+    if (i) c.append(el('p', 'muted small', 'Starts when the ' + NAMES[STAGES[i - 1]] + ' step is done.'));
+    else { const sk = el('div', 'skeleton'); sk.setAttribute('aria-hidden', 'true'); sk.append(el('span'), el('span'), el('span')); c.append(sk); }
+    return c;
+  }));
+}
+
+function parsed(stage) {
+  if (stage.structured && typeof stage.structured === 'object') return stage.structured;
+  try { return JSON.parse(stage.output); } catch (_) { return null; }
+}
+
+function renderPlan(v) {
+  const dl = el('dl', 'plan');
+  const add = (k, node) => { dl.append(el('dt', '', k)); const dd = el('dd'); dd.append(node); dl.append(dd); };
+  add('Hook', document.createTextNode(v.hook));
+  add('Format', el('span', 'chip', v.format === 'carousel' ? 'Carousel' : 'Short video'));
+  const ul = el('ul'); (v.key_points || []).forEach(p => ul.append(el('li', '', p))); add('Key points', ul);
+  add('Call to action', document.createTextNode(v.cta));
+  return dl;
+}
+function renderDraft(v) {
+  const card = el('article', 'post well');
+  const meta = el('div', 'post__meta'); meta.append(el('span', 'chip', v.format === 'carousel' ? 'Carousel' : 'Short video'), el('span', 'measured', (v.beats || []).length + (v.format === 'carousel' ? ' slides' : ' beats')));
+  const ol = el('ol', 'slides');
+  (v.beats || []).forEach(b => { const li = el('li'); li.append(el('span', 'slide__label', b.label), el('span', '', b.text)); ol.append(li); });
+  card.append(meta, ol);
+  if (v.caption) card.append(el('p', 'post__caption small', v.caption));
+  return card;
+}
+function renderVerdict(v) {
+  const wrap = el('div', 'field');
+  const row = el('div', 'verdict');
+  row.append(el('span', 'chip chip--' + (v.decision === 'approve' ? 'done' : 'cutoff'), v.decision === 'approve' ? 'Approved by Reviewer' : 'Sent back for changes'));
+  wrap.append(row);
+  if (!v.findings || !v.findings.length) wrap.append(el('p', 'muted small', 'No findings'));
+  else { const ul = el('ul'); v.findings.forEach(f => { const li = el('li'); if (f.rule_id) li.append(el('code', 'measured', f.rule_id), document.createTextNode(' ')); li.append(document.createTextNode(f.message)); ul.append(li); }); wrap.append(ul); }
+  return wrap;
+}
+
+function renderStage(stage) {
+  const section = el('section', 'step panel');
+  const attempts = stage.attempts || [];
+  const status = stage.failed ? ['failed', 'Failed'] : stage.truncated ? ['cutoff', 'Cut off'] : attempts.length > 1 ? ['backup', 'On backup'] : ['done', 'Done'];
+  const head = el('div', 'step__head'); head.append(el('h2', 'step__name', NAMES[String(stage.stage).toLowerCase()] || stage.stage), el('span', 'chip chip--' + status[0], status[1]));
+  section.append(head);
+  const list = el('ol', 'attempts');
+  for (const a of attempts) {
+    const failed = a.status !== 'success';
+    const row = el('li', 'attempt' + (failed ? ' is-failed' : ''));
+    const details = [a.error_code || (a.attempt != null ? 'attempt ' + a.attempt : null), money(a.cost_usd), secs(a.latency_ms)].filter(Boolean).join(' · ');
+    row.append(el('span', 'measured provider', a.provider), el('span', 'measured model-name', a.concrete_model || ''), el('span', 'measured' + (a.error_code ? ' code' : ''), details), el('span', 'chip chip--' + (failed ? 'failed' : 'done'), failed ? 'failed' : 'success'));
+    list.append(row);
+  }
+  section.append(list);
+  if (!stage.failed && attempts.length > 1) section.append(el('p', 'fallback-note', 'That provider failed, so a backup provider took over.'));
+  const v = parsed(stage), kind = String(stage.stage).toLowerCase();
+  if (v && kind === 'planner') section.append(renderPlan(v));
+  else if (v && kind === 'writer') section.append(renderDraft(v));
+  else if (v && kind === 'reviewer') section.append(renderVerdict(v));
+  else if (stage.output) section.append(el('pre', 'output', stage.output));
+  if (stage.truncated) section.append(alertBox('truncated'));
+  return section;
+}
+
+/* ---- Post, gates and audit log. All state comes from the server. ---- */
+let post = null;
+function renderLifecycle(status) {
+  $('#lifecycle').replaceChildren(...LIFECYCLE.map(([k, label, gate]) => {
+    const li = el('li'); const c = el('span', 'chip chip--stage' + (gate ? ' is-gate' : '') + (k === status ? ' is-current' : ''), label);
+    if (k === status) c.setAttribute('aria-current', 'step'); li.append(c); return li;
+  }));
+}
+function renderTrail(audit) {
+  $('#trail').replaceChildren(...(audit || []).map(e => {
+    const li = el('li');
+    const time = el('time', 'measured', new Date(e.at).toLocaleString()); time.dateTime = e.at;
+    const description = el('span');
+    description.append(el('span', e.actor === 'human' ? 'who-person' : 'who-agent', e.actor), document.createTextNode(' · ' + e.from + ' → ' + e.to + (e.event === 'rejected' ? ' · Rejected: ' + e.reason : '')));
+    li.append(time, description); return li;
+  }));
+}
+function showStep(gate, step) { gate.querySelectorAll('[data-step]').forEach(n => n.hidden = n.dataset.step !== step); }
+function renderPost(p) {
+  post = p; $('#post-area').hidden = false; $('#gate-error').replaceChildren();
+  renderLifecycle(p.status); renderTrail(p.audit);
+  const g1 = $('#gate1'), g2 = $('#gate2');
+  g1.hidden = p.status !== 'draft'; g2.hidden = p.status !== 'review_passed';
+  showStep(g1, 'ask'); showStep(g2, 'ask');
+  $('#skip-row').hidden = p.status === 'scheduled' || p.status === 'published';
+}
+async function postAction(path, body) {
+  try {
+    const r = await fetch('/meta/posts/' + encodeURIComponent(post.id) + path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    const d = await r.json().catch(() => ({}));
+    if (d.post) renderPost(d.post);
+    if (!r.ok) $('#gate-error').replaceChildren(alertBox(d.code, d.message));
+  } catch (_) { $('#gate-error').replaceChildren(alertBox(null, 'Unable to complete the action.')); }
+}
+document.querySelectorAll('.gate').forEach(gate => gate.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.open) { showStep(gate, b.dataset.open); const f = gate.querySelector('[data-step="' + b.dataset.open + '"] textarea, [data-step="' + b.dataset.open + '"] .btn--primary'); if (f) f.focus(); }
+  if (b.dataset.go) { b.disabled = true; postAction('/transition', {target: b.dataset.go, actor: 'human'}).finally(() => b.disabled = false); }
+  if (b.dataset.reject) { const t = $('#' + b.dataset.reject); if (!t.value.trim()) { t.setAttribute('aria-invalid', 'true'); t.focus(); return; } t.removeAttribute('aria-invalid'); postAction('/reject', {reason: t.value.trim(), actor: 'human'}); }
+}));
+$('#skip').addEventListener('click', () => postAction('/transition', {target: 'scheduled', actor: 'human'}));
+
 form.addEventListener('submit', async e => {
   e.preventDefault();
-  result.replaceChildren(element('div', 'chip chip--running', 'Running'));
+  runBtn.disabled = true; runBtn.classList.add('is-loading');
+  $('#post-area').hidden = true; skeletonCards();
   try {
-    const response = await fetch('/meta/runs', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({brief:document.querySelector('#brief').value})});
-    const data = await response.json();
+    const r = await fetch('/meta/runs', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({brief: $('#brief').value})});
+    const d = await r.json();
     result.replaceChildren();
-    if (!response.ok) {
-      const alert = element('div', 'alert');
-      alert.setAttribute('role', 'alert');
-      const heading = element('div', 'alert__title');
-      heading.append(element('span', '', 'Unable to complete the run'), element('code', 'measured alert__code', data.code || ''));
-      alert.append(heading, element('p', '', data.message || (data.detail ? JSON.stringify(data.detail) : response.statusText)));
-      result.append(alert);
-    }
-    const stages = [...(data.stages || [])];
-    if (!response.ok && data.failed_stage) stages.push({stage: data.failed_stage, attempts: data.attempts || [], output: '', failed: true});
-    for (const stage of stages) {
-      const section = element('section', 'step panel');
-      const head = element('div', 'step__head');
-      const status = stage.failed ? ['failed', 'Failed'] : stage.truncated ? ['cutoff', 'Cut off'] : (stage.attempts || []).length > 1 ? ['backup', 'On backup'] : ['done', 'Done'];
-      head.append(element('h2', 'step__name', stage.stage), element('span', 'chip chip--' + status[0], status[1]));
-      section.append(head);
-      const attempts = element('ol', 'attempts');
-      for (const a of stage.attempts || []) {
-        const failed = a.status !== 'success';
-        const row = element('li', 'attempt' + (failed ? ' is-failed' : ''));
-        const details = [a.error_code || (a.attempt != null ? 'attempt ' + a.attempt : '')];
-        if (a.cost_usd != null) details.push('$' + a.cost_usd);
-        if (a.latency_ms != null) details.push((a.latency_ms / 1000).toFixed(2) + 's');
-        row.append(element('span', 'measured provider', a.provider), element('span', 'measured model-name', a.concrete_model || ''), element('span', 'measured' + (a.error_code ? ' code' : ''), details.filter(Boolean).join(' · ')), element('span', 'chip chip--' + (failed ? 'failed' : 'done'), a.status));
-        attempts.append(row);
-      }
-      section.append(attempts);
-      if (!stage.failed && (stage.attempts || []).length > 1) section.append(element('p', 'fallback-note', 'That provider failed, so a backup provider took over.'));
-      if (stage.output) section.append(renderOutput(stage));
-      result.append(section);
-    }
-  } catch (_) { result.replaceChildren(element('div', 'alert', 'Unable to complete the run.')); }
+    if (!r.ok) result.append(alertBox(d.code, d.message));
+    const stages = [...(d.stages || [])];
+    if (!r.ok && d.failed_stage) stages.push({stage: d.failed_stage, attempts: d.attempts || [], output: '', failed: true});
+    stages.forEach(s => result.append(renderStage(s)));
+    if (d.post) renderPost(d.post);
+  } catch (_) { result.replaceChildren(alertBox(null, 'Unable to complete the run.')); }
+  finally { runBtn.disabled = false; runBtn.classList.remove('is-loading'); }
 });
 </script>
 </body>
