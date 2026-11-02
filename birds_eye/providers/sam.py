@@ -1,6 +1,6 @@
 """SAM 3.1 segmentation over the Meta Model API (Responses API SSE).
 
-Image only, text prompt. The wire format is the documented
+Image and video, text prompt. The wire format is the documented
 segmentation-output grammar: each ``response.output_text.delta`` payload
 carries frame lines of the form ``<Nf>`` followed by comma-separated
 records ``OBJECT_ID`` + box token + mask token. An empty lane means zero
@@ -101,6 +101,7 @@ class SegmentationResult(BaseModel):
     source_w: int = 0
     source_h: int = 0
     objects: list[SegmentedObject] = Field(default_factory=list)
+    usage: dict | None = None
 
 
 _FRAME_RE = re.compile(r"<([0-9]+)f(?:;[^>]*)?>(.*)$", re.DOTALL)
@@ -232,7 +233,7 @@ def parse_segmentation_text(text: str) -> SegmentationResult:
     result = SegmentationResult()
     if not text.strip():
         return result
-    for raw_line in text.splitlines():
+    for raw_line in re.split(r"(?=<[0-9]+f(?:;[^>]*)?>)", text):
         line = raw_line.strip()
         if not line:
             continue
@@ -316,7 +317,7 @@ def _error_for_status(status: int) -> ProviderError:
     return ProviderError("INVALID_REQUEST")
 
 
-async def _read_output_text(response) -> str:
+async def _read_output_text(response) -> tuple[str, dict | None]:
     """Accumulate output_text deltas until response.completed."""
 
     import json as _json
@@ -325,9 +326,10 @@ async def _read_output_text(response) -> str:
     data_lines: list[str] = []
     deltas: list[str] = []
     completed = False
+    usage = None
 
     def dispatch() -> None:
-        nonlocal completed
+        nonlocal completed, usage
         if event is None:
             return
         payload = "\n".join(data_lines)
@@ -341,6 +343,16 @@ async def _read_output_text(response) -> str:
             deltas.append(data["delta"])
         elif event == "response.completed":
             completed = True
+            try:
+                data = _json.loads(payload) if payload else {}
+            except ValueError:
+                raise _malformed("Segmentation completion is not JSON.") from None
+            if isinstance(data, dict):
+                response_data = data.get("response", data)
+                if isinstance(response_data, dict) and isinstance(
+                    response_data.get("usage"), dict
+                ):
+                    usage = response_data["usage"]
         elif event in ("response.failed", "response.incomplete"):
             raise ProviderError("PROVIDER_5XX")
         elif event in (
@@ -366,7 +378,7 @@ async def _read_output_text(response) -> str:
     dispatch()
     if not completed:
         raise _malformed("Segmentation stream ended without response.completed.")
-    return "".join(deltas)
+    return "".join(deltas), usage
 
 
 async def segment(
@@ -408,12 +420,14 @@ async def segment(
         ) as response:
             if response.status_code >= 400:
                 raise _error_for_status(response.status_code)
-            text = await _read_output_text(response)
+            text, usage = await _read_output_text(response)
     except httpx.TimeoutException:
         raise ProviderError("TIMEOUT") from None
     except httpx.RequestError:
         raise ProviderError("CONNECTION_ERROR") from None
-    return parse_segmentation_text(text)
+    result = parse_segmentation_text(text)
+    result.usage = usage
+    return result
 
 
 __all__ = [  # noqa: RUF022 - grouped constants, models, functions.

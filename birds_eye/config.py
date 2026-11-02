@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     writer_max_tokens: int = Field(default=4000, ge=400)
     reviewer_max_tokens: int = Field(default=3000, ge=400)
     max_sam_calls_per_run: int = Field(default=1, ge=0)
+    ffmpeg_bin: str = "ffmpeg"
+    max_video_bytes: int = Field(default=25_000_000, gt=0)
+    max_video_frames_per_run: int = Field(default=120, ge=0)
     max_image_bytes: int = Field(default=4_000_000, gt=0)
     sam_max_side_px: int = Field(default=1536, gt=0)
     max_calls_per_run: int = Field(default=12, ge=1)

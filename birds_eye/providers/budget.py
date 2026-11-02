@@ -110,9 +110,24 @@ class LedgerBudgetGuard:
             for n in (prompt, completion)
         )
         if request.operation == "segmentation":
-            cost = (
-                worst if status == "success" or error_code == "TIMEOUT" else Decimal(0)
+            frames = (
+                usage.get("video_frames_processed") if isinstance(usage, dict) else None
             )
+            if (
+                request.media
+                and request.media.kind == "video"
+                and status == "success"
+                and isinstance(frames, int)
+                and not isinstance(frames, bool)
+                and frames >= 0
+            ):
+                cost = cost_for_frames(frames)
+            else:
+                cost = (
+                    worst
+                    if status == "success" or error_code == "TIMEOUT"
+                    else Decimal(0)
+                )
         elif valid:
             input_price, cached_price, output_price = self.prices(provider, model)
             details = usage.get("prompt_tokens_details")

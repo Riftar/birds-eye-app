@@ -42,6 +42,7 @@ class RunContext(BaseModel):
     inputs: RunInputs
     input_hashes: dict[str, str]
     user_brief: str | None = None
+    video_data_url: str | None = None
 
 
 class ContentPlan(BaseModel):

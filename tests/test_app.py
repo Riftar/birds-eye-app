@@ -51,7 +51,12 @@ async def test_demo_rendering_and_pending_run(settings):
         node, stdin=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
     )
     _, stderr = await process.communicate(
-        (harness + "\n" + script.group(1) + "\nverifyDemo().catch(e => { console.error(e); process.exitCode = 1; });").encode()
+        (
+            harness
+            + "\n"
+            + script.group(1)
+            + "\nverifyDemo().catch(e => { console.error(e); process.exitCode = 1; });"
+        ).encode()
     )
     assert process.returncode == 0, stderr.decode()
     assert re.search(r"\.output\s*\{[^}]*font-family:\s*var\(--font-body\)", css)

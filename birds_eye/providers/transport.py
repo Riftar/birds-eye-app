@@ -36,6 +36,31 @@ class LiveTransport:
                 raise ProviderError("INVALID_REQUEST")
 
             async def invoke_sam(client):
+                if request.media.kind == "video":
+                    import base64
+
+                    from birds_eye.providers.meta_files import temp_file
+
+                    data = base64.b64decode(request.media.data_url.split(",", 1)[1])
+                    async with temp_file(
+                        client,
+                        self.settings.meta_model_api_base_url,
+                        self.settings.model_api_key,
+                        data,
+                        "video.mp4",
+                        "video/mp4",
+                        ttl_seconds=self.settings.meta_file_ttl_seconds,
+                        timeout=self.settings.provider_timeout_seconds,
+                    ) as file_id:
+                        return await segment(
+                            client,
+                            self.settings.meta_model_api_base_url,
+                            self.settings.model_api_key,
+                            request.media.model_copy(update={"file_id": file_id}),
+                            request.prompt,
+                            self.settings.provider_timeout_seconds,
+                            mask_encoding="one_bit",
+                        )
                 return await segment(
                     client,
                     self.settings.meta_model_api_base_url,
@@ -52,7 +77,10 @@ class LiveTransport:
                     result = await invoke_sam(client)
             else:
                 result = await invoke_sam(self.client)
-            return ProviderReply(output=result.model_dump(), usage={"images": 1})
+            return ProviderReply(
+                output=result.model_dump(),
+                usage=result.usage if request.media.kind == "video" else {"images": 1},
+            )
 
         configs = {
             ProviderId.BASETEN: (
