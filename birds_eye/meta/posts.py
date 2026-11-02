@@ -30,16 +30,27 @@ class RejectRequest(BaseModel):
 
 
 def create_post(app, review_passed):
-    post = {"id": str(uuid4()), "status": PostStatus.DRAFT, "audit": [],
-            "review_passed": review_passed}
+    post = {
+        "id": str(uuid4()),
+        "status": PostStatus.DRAFT,
+        "audit": [],
+        "review_passed": review_passed,
+    }
     app.state.posts[post["id"]] = post
     record(post, "agent", PostStatus.IDEA, PostStatus.DRAFT)
     return post
 
 
 def record(post, actor, source, target, **extra):
-    post["audit"].append({"actor": actor, "from": source, "to": target,
-                          "at": datetime.now(UTC).isoformat(), **extra})
+    post["audit"].append(
+        {
+            "actor": actor,
+            "from": source,
+            "to": target,
+            "at": datetime.now(UTC).isoformat(),
+            **extra,
+        }
+    )
 
 
 def get_post(request, post_id):
@@ -65,14 +76,19 @@ async def post_transition(post_id: str, body: TransitionRequest, request: Reques
         if body.actor != Actor.HUMAN:
             raise SafeError("HUMAN_ONLY", "This transition requires a human.")
         if body.target not in (PostStatus.APPROVED, PostStatus.SCHEDULED):
-            raise SafeError("INVALID_TRANSITION", "The requested transition is invalid.")
+            raise SafeError(
+                "INVALID_TRANSITION", "The requested transition is invalid."
+            )
         move(post, body.target, body.actor)
         if body.target == PostStatus.APPROVED:
             move(post, PostStatus.IN_REVIEW, Actor.AGENT)
             if post["review_passed"]:
                 move(post, PostStatus.REVIEW_PASSED, Actor.AGENT)
     except SafeError as exc:
-        return JSONResponse(status_code=409, content={"code": exc.code, "message": exc.message, "post": post})
+        return JSONResponse(
+            status_code=409,
+            content={"code": exc.code, "message": exc.message, "post": post},
+        )
     return {"post": post}
 
 
@@ -80,8 +96,19 @@ async def post_transition(post_id: str, body: TransitionRequest, request: Reques
 async def reject_post(post_id: str, body: RejectRequest, request: Request):
     post = get_post(request, post_id)
     if body.actor != Actor.HUMAN:
-        return JSONResponse(status_code=409, content={"code": "HUMAN_ONLY", "post": post})
+        return JSONResponse(
+            status_code=409, content={"code": "HUMAN_ONLY", "post": post}
+        )
     if post["status"] not in (PostStatus.DRAFT, PostStatus.REVIEW_PASSED):
-        return JSONResponse(status_code=409, content={"code": "INVALID_TRANSITION", "post": post})
-    record(post, Actor.HUMAN, post["status"], post["status"], reason=body.reason, event="rejected")
+        return JSONResponse(
+            status_code=409, content={"code": "INVALID_TRANSITION", "post": post}
+        )
+    record(
+        post,
+        Actor.HUMAN,
+        post["status"],
+        post["status"],
+        reason=body.reason,
+        event="rejected",
+    )
     return {"post": post}

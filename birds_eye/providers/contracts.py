@@ -21,11 +21,12 @@ class ModelBinding(BaseModel):
 
 
 class MediaInput(BaseModel):
-    kind: Literal["image"] = "image"
+    kind: Literal["image", "video"] = "image"
     mime: str
     data_url: str
     bytes_len: int = Field(ge=0)
     file_id: str | None = None
+    frames: int | None = Field(default=None, ge=1)
 
     @property
     def image_url(self) -> str:

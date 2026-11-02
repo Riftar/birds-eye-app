@@ -11,7 +11,7 @@ import httpx
 from PIL import Image, UnidentifiedImageError
 
 from birds_eye.config import Settings
-from birds_eye.providers.budget import LedgerBudgetGuard
+from birds_eye.providers.budget import LedgerBudgetGuard, cost_for_frames
 from birds_eye.providers.contracts import (
     BudgetGuard,
     MediaInput,
@@ -101,6 +101,8 @@ class RunBudget:
         self.max_calls = settings.max_calls_per_run
         self.max_tokens = settings.max_tokens_per_run
         self.max_sam_calls = settings.max_sam_calls_per_run
+        self.video_frames = 0
+        self.max_video_frames = settings.max_video_frames_per_run
         self.sam_calls = 0
         self.calls = 0
         self.tokens = 0
@@ -158,6 +160,7 @@ def safe_usage(usage):
             "completion_tokens",
             "total_tokens",
             "images",
+            "video_frames_processed",
         }
         and isinstance(v, int)
         and not isinstance(v, bool)
@@ -197,11 +200,22 @@ class ModelRouter:
             raise RoutingError("INVALID_REQUEST", "Unsupported model or operation.", [])
         if request.operation == "segmentation":
             try:
-                request = request.model_copy(
-                    update={"media": prepare_image(request.media, self.settings)}
-                )
+                if request.media and request.media.kind == "video":
+                    from birds_eye.providers.video import preprocess_video
+
+                    media = preprocess_video(request.media, self.settings)
+                    if (
+                        self.run_budget.video_frames + media.frames
+                        > self.run_budget.max_video_frames
+                    ):
+                        raise ProviderError("VIDEO_FRAME_CAP")
+                    request = request.model_copy(update={"media": media})
+                else:
+                    request = request.model_copy(
+                        update={"media": prepare_image(request.media, self.settings)}
+                    )
             except ProviderError as exc:
-                raise RoutingError(exc.code, "Invalid image.", []) from None
+                raise RoutingError(exc.code, exc.message, []) from None
         effective = (
             max(request.max_tokens or self.settings.muse_max_tokens_default, 400)
             if request.logical_model == "muse-spark"
@@ -228,6 +242,7 @@ class ModelRouter:
         }
         safe = fallback | {
             "RUN_BUDGET_EXCEEDED",
+            "VIDEO_FRAME_CAP",
             "INVALID_REQUEST",
             "SAFETY_REFUSAL",
             "MALFORMED_RESPONSE",
@@ -249,6 +264,11 @@ class ModelRouter:
                     "stage": request.stage,
                     "operation": request.operation,
                     "objects": None,
+                    "media": request.media.kind if request.media else None,
+                    "frames": request.media.frames
+                    if request.media and request.media.kind == "video"
+                    else None,
+                    "billed_frames": None,
                     "call_id": request.call_id,
                     "attempt": retry + 1,
                     "logical_model": request.logical_model,
@@ -283,7 +303,12 @@ class ModelRouter:
                             max_cost = request.max_cost_usd
                             if isinstance(self.budget, LedgerBudgetGuard):
                                 if request.operation == "segmentation":
-                                    max_cost = self.settings.sam_price_per_image_usd
+                                    max_cost = (
+                                        cost_for_frames(request.media.frames)
+                                        if request.media
+                                        and request.media.kind == "video"
+                                        else self.settings.sam_price_per_image_usd
+                                    )
                                 else:
                                     input_price, _, output_price = self.budget.prices(
                                         provider, binding.concrete_model
@@ -302,6 +327,13 @@ class ModelRouter:
                             reserved = self.run_budget.reserve(
                                 effective, request.operation
                             )
+                            if request.media and request.media.kind == "video":
+                                if (
+                                    self.run_budget.video_frames + request.media.frames
+                                    > self.run_budget.max_video_frames
+                                ):
+                                    raise ProviderError("VIDEO_FRAME_CAP")
+                                self.run_budget.video_frames += request.media.frames
                             record["effective_max_tokens"] = record[
                                 "max_completion_tokens"
                             ] = reserved
@@ -338,8 +370,22 @@ class ModelRouter:
                                 request.operation == "segmentation"
                                 and reply.cost_usd is None
                             ):
-                                reply.cost_usd = self.settings.sam_price_per_image_usd
+                                reply.cost_usd = (
+                                    cost_for_frames(
+                                        (reply.usage or {}).get(
+                                            "video_frames_processed",
+                                            request.media.frames,
+                                        )
+                                    )
+                                    if request.media and request.media.kind == "video"
+                                    else self.settings.sam_price_per_image_usd
+                                )
                             usage = reply.usage
+                            if request.media and request.media.kind == "video":
+                                actual = (safe_usage(usage) or {}).get(
+                                    "video_frames_processed", request.media.frames
+                                )
+                                record["billed_frames"] = max(50, actual)
                             record.update(
                                 status="success",
                                 usage=safe_usage(usage),

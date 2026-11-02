@@ -15,6 +15,7 @@ router = APIRouter(prefix="/meta")
 
 class BriefRequest(BaseModel):
     brief: str = Field(min_length=1, max_length=4000)
+    video_data_url: str | None = None
 
 
 def resolve(request: Request, inputs: RunInputs | None) -> RunInputs:
@@ -44,7 +45,9 @@ async def run(request: Request, inputs: BriefRequest | RunInputs | None = None):
     scenario = resolve(request, inputs if isinstance(inputs, RunInputs) else None)
     context = make_context(scenario)
     if isinstance(inputs, BriefRequest):
-        context = context.model_copy(update={"user_brief": inputs.brief})
+        context = context.model_copy(
+            update={"user_brief": inputs.brief, "video_data_url": inputs.video_data_url}
+        )
     if settings.provider_mode == "stub":
         return JSONResponse(
             status_code=501,
@@ -77,7 +80,11 @@ async def run(request: Request, inputs: BriefRequest | RunInputs | None = None):
     except RoutingError as exc:
         request.app.state.ledger = getattr(request.app.state.budget, "summary", dict)()
         return JSONResponse(
-            status_code=402 if exc.code == "PROVIDER_BUDGET_EXHAUSTED" else 502,
+            status_code=400
+            if exc.code in {"VIDEO_FRAME_CAP", "INVALID_VIDEO", "FFMPEG_NOT_FOUND"}
+            else 402
+            if exc.code == "PROVIDER_BUDGET_EXHAUSTED"
+            else 502,
             content={
                 "ledger": getattr(request.app.state.budget, "summary", dict)(),
                 "code": exc.code,
